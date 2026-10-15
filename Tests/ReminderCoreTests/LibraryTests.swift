@@ -33,7 +33,7 @@ final class LibraryTests: XCTestCase {
         let library = SpiritualLibrary.shared
         XCTAssertFalse(library.search("الاعمال بالنيات", category: .hadith).isEmpty)
         XCTAssertFalse(library.search("بسم الله الرحمن الرحيم", category: .quran).isEmpty)
-        XCTAssertTrue(library.entry("quran-1-1")!.text.contains("ِ"))
+        XCTAssertTrue(library.entry("quran-1-1")!.text.unicodeScalars.contains { $0.value == 0x0650 })
     }
     func testSourceAndAudioRemainAttachedToReminder() throws {
         let sample = try XCTUnwrap(SpiritualLibrary.shared.audioSample)

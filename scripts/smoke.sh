@@ -19,7 +19,6 @@ results = json.loads(source.read_text())
 print(json.dumps(results, indent=2))
 assert results and all(results.values()), 'A runtime smoke check failed'
 shutil.copy(source, 'dist/smoke-results.json')
-preview = source.parent / 'dashboard.png'
-if preview.exists():
-    shutil.copy(preview, 'dist/dashboard.png')
+for preview in source.parent.glob('*.png'):
+    shutil.copy(preview, pathlib.Path('dist') / preview.name)
 PY
