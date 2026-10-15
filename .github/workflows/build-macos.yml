@@ -79,6 +79,7 @@ jobs:
             dist/build.log
             dist/tests.log
             dist/runtime-smoke.log
+            dist/hang-sample.txt
           retention-days: 7
       - name: Cleanup signing material
         if: always()

@@ -2,11 +2,12 @@
 set -euo pipefail
 "dist/Master Reminder.app/Contents/MacOS/MasterReminder" --smoke-test > dist/runtime-smoke.log 2>&1 &
 APP_PID=$!
-for attempt in $(seq 1 40); do
+for attempt in $(seq 1 60); do
   if ! kill -0 "$APP_PID" 2>/dev/null; then break; fi
   sleep 1
 done
 if kill -0 "$APP_PID" 2>/dev/null; then
+  sample "$APP_PID" 1 -file dist/hang-sample.txt || true
   kill "$APP_PID"
   echo '::error::Runtime smoke timed out'
   exit 1

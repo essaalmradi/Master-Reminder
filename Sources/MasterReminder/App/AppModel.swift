@@ -1,5 +1,6 @@
 import AppKit
 import AVFoundation
+import Darwin
 import SwiftUI
 import UniformTypeIdentifiers
 import UserNotifications
@@ -334,11 +335,17 @@ enum Page: String, CaseIterable, Identifiable {
     private func clearRuntime() {
         overlay.close(); sounds.stop(); temporary.removeAll(); transientLedger.removeAll(); activeQueue.removeAll(); recent.removeAll()
     }
-    func quit() { prepareForSleep(); NSApp.terminate(nil) }
+    func quit() {
+        prepareForSleep(); isCreating = false; editing = nil
+        if let sheet = mainWindow?.attachedSheet { mainWindow?.endSheet(sheet); sheet.orderOut(nil) }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { NSApp.terminate(nil) }
+    }
 
     private func runSmokeTest() async {
         // Runs inside the real .app on the macOS runner. It never requests permissions or login registration.
         try? await Task.sleep(nanoseconds: 2_000_000_000)
+        func checkpoint(_ label: String) { print("SMOKE: " + label); fflush(stdout) }
+        checkpoint("started")
         var results: [String: Bool] = [:]
         results["mainWindow"] = mainWindow?.isVisible == true
         results["libraryLoaded"] = SpiritualLibrary.shared.entries.count == 6545
@@ -351,6 +358,7 @@ enum Page: String, CaseIterable, Identifiable {
         widgets.set(.dhikr, visible: false); results["widgetRemoved"] = widgets.count == 0
         widgets.setFloating(false)
 
+        checkpoint("resources and widgets passed")
         testOverlay()
         results["overlayCreated"] = overlay.windowCount > 0
         if let occurrence = overlay.current { finish(occurrence) }
@@ -372,11 +380,13 @@ enum Page: String, CaseIterable, Identifiable {
         } else { results["runtimeSnooze"] = false }
         deleteReminder(reminder); results["delete"] = !data.reminders.contains { $0.id == reminder.id }
         results["deleteSnoozeCleanup"] = data.snoozes.isEmpty
+        checkpoint("CRUD and snooze passed")
         testReminder()
         try? await Task.sleep(nanoseconds: 11_000_000_000)
         results["tenSecondTestTrigger"] = overlay.current?.reminder.isTemporary == true
         results["temporaryNotPersisted"] = (try? storage.load().reminders.isEmpty) == true
         if let occurrence = overlay.current { finish(occurrence) }
+        checkpoint("temporary test passed")
         clearRuntime(); notice = nil
         mainWindow?.close(); results["closeKeepsProcessAlive"] = NSApp.isRunning
         openWindow(); results["reopen"] = mainWindow?.isVisible == true
@@ -385,6 +395,7 @@ enum Page: String, CaseIterable, Identifiable {
             view.cacheDisplay(in: view.bounds, to: bitmap)
             try? bitmap.representation(using: .png, properties: [:])?.write(to: url.deletingLastPathComponent().appendingPathComponent("dashboard.png"))
         }
+        checkpoint("dashboard captured")
         for (target, name) in [(Page.library, "library"), (.widgets, "widgets"), (.tasbih, "tasbih")] {
             page = target
             try? await Task.sleep(nanoseconds: 500_000_000)
@@ -393,16 +404,22 @@ enum Page: String, CaseIterable, Identifiable {
                 try? bitmap.representation(using: .png, properties: [:])?.write(to: url.deletingLastPathComponent().appendingPathComponent(name + ".png"))
             }
         }
+        checkpoint("pages captured; opening wizard")
         page = .dashboard; newReminder()
         try? await Task.sleep(nanoseconds: 600_000_000)
+        checkpoint("wizard opened; capturing")
         if let view = mainWindow?.attachedSheet?.contentView, let bitmap = view.bitmapImageRepForCachingDisplay(in: view.bounds) {
             view.cacheDisplay(in: view.bounds, to: bitmap)
             try? bitmap.representation(using: .png, properties: [:])?.write(to: url.deletingLastPathComponent().appendingPathComponent("creation.png"))
             results["wizardSheetRendered"] = true
         } else { results["wizardSheetRendered"] = false }
+        checkpoint("wizard captured; dismissing")
         isCreating = false
+        try? await Task.sleep(nanoseconds: 900_000_000)
+        results["wizardDismissed"] = mainWindow?.attachedSheet == nil
         try? JSONSerialization.data(withJSONObject: results, options: [.prettyPrinted, .sortedKeys]).write(to: url)
         Log.app.info("Runtime smoke completed")
-        NSApp.terminate(nil)
+        checkpoint("complete")
+        quit()
     }
 }
