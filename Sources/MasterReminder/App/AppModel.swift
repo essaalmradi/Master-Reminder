@@ -241,7 +241,11 @@ enum Page: String, CaseIterable, Identifiable {
     }
     private func notificationAction(id: String, action: String) {
         if action == UNNotificationDefaultActionIdentifier { openWindow(); return }
-        guard let occurrence = recent[id], Date().timeIntervalSince(occurrence.date) <= TimeInterval(settings.graceMinutes * 60) else { return }
+        let now = Date()
+        let restored = data.snoozes.map(\.occurrence) + allReminders.flatMap {
+            ReminderScheduler.occurrences(for: $0, from: now.addingTimeInterval(TimeInterval(-settings.graceMinutes * 60)), through: now)
+        }
+        guard let occurrence = recent[id] ?? restored.first(where: { $0.id == id }), now.timeIntervalSince(occurrence.date) <= TimeInterval(settings.graceMinutes * 60) else { return }
         if action == "done" { finish(occurrence) }
         else if action.hasPrefix("snooze-"), let minutes = Int(action.dropFirst(7)) { snooze(occurrence, minutes: minutes) }
     }
@@ -342,10 +346,30 @@ enum Page: String, CaseIterable, Identifiable {
         reminder.title = "Updated"; saveReminder(reminder)
         results["edit"] = data.reminders.first { $0.id == reminder.id }?.title == "Updated"
         results["persistence"] = (try? storage.load().reminders.contains { $0.id == reminder.id }) == true
+        reminder = data.reminders.first { $0.id == reminder.id } ?? reminder
+        reminder.date = Date().addingTimeInterval(2); saveReminder(reminder)
+        try? await Task.sleep(nanoseconds: 3_500_000_000)
+        results["runtimeDueTrigger"] = overlay.current?.reminder.id == reminder.id
+        if let occurrence = overlay.current {
+            snooze(occurrence, minutes: 5)
+            results["runtimeSnooze"] = data.snoozes.contains { $0.parentID == occurrence.id }
+            results["snoozeClosesOverlay"] = overlay.current == nil
+            results["snoozePersisted"] = (try? storage.load().snoozes.contains { $0.parentID == occurrence.id }) == true
+        } else { results["runtimeSnooze"] = false }
         deleteReminder(reminder); results["delete"] = !data.reminders.contains { $0.id == reminder.id }
+        results["deleteSnoozeCleanup"] = data.snoozes.isEmpty
+        testReminder()
+        try? await Task.sleep(nanoseconds: 11_000_000_000)
+        results["tenSecondTestTrigger"] = overlay.current?.reminder.isTemporary == true
+        results["temporaryNotPersisted"] = (try? storage.load().reminders.isEmpty) == true
+        if let occurrence = overlay.current { finish(occurrence) }
         mainWindow?.close(); results["closeKeepsProcessAlive"] = NSApp.isRunning
         openWindow(); results["reopen"] = mainWindow?.isVisible == true
         let url = storage.url.deletingLastPathComponent().appendingPathComponent("smoke-results.json")
+        if let view = mainWindow?.contentView, let bitmap = view.bitmapImageRepForCachingDisplay(in: view.bounds) {
+            view.cacheDisplay(in: view.bounds, to: bitmap)
+            try? bitmap.representation(using: .png, properties: [:])?.write(to: url.deletingLastPathComponent().appendingPathComponent("dashboard.png"))
+        }
         try? JSONSerialization.data(withJSONObject: results, options: [.prettyPrinted, .sortedKeys]).write(to: url)
         Log.app.info("Runtime smoke completed")
         NSApp.terminate(nil)

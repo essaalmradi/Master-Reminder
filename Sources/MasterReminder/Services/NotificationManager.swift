@@ -57,17 +57,24 @@ import Combine
         }
         center.removeDeliveredNotifications(withIdentifiers: stale.map { $0.request.identifier })
         guard status == .authorized || status == .provisional else { return }
-        let existing = Set(pending.map(\.identifier))
-        for item in plan where !existing.contains(item.id) {
+        let existing = Dictionary(uniqueKeysWithValues: pending.map { ($0.identifier, $0) })
+        for item in plan {
             // A reconcile may cross a due boundary; never create an immediate duplicate.
             guard item.date.timeIntervalSinceNow > 0.5 else { continue }
             let content = UNMutableNotificationContent()
             let reminder = item.occurrence.reminder
             content.title = item.kind == .pre ? "باقي \(reminder.preAlertMinutes) دقائق على \(reminder.title)" : reminder.title
             content.body = reminder.detail.isEmpty ? "حان الوقت — خذ لحظة لنفسك." : reminder.detail
-            if settings.soundEnabled && reminder.sound != .none { content.sound = .default }
+            // Due audio belongs to SoundManager even when our menu-bar app is in the background.
+            // OS pre-alerts keep their normal short sound; due banners remain silent if the app quits.
+            if item.kind == .pre && settings.soundEnabled && reminder.sound != .none { content.sound = .default }
             content.categoryIdentifier = item.kind == .due ? (reminder.snoozeAllowed ? "reminder" : "no-snooze") : ""
             content.userInfo = ["occurrenceID": item.occurrence.id, "due": item.occurrence.date.timeIntervalSince1970, "fireAt": item.date.timeIntervalSince1970]
+            if let old = existing[item.id],
+               let fireAt = old.content.userInfo["fireAt"] as? Double,
+               abs(fireAt - item.date.timeIntervalSince1970) < 0.5,
+               old.content.title == content.title, old.content.body == content.body,
+               (old.content.sound == nil) == (content.sound == nil) { continue }
             let trigger = UNTimeIntervalNotificationTrigger(timeInterval: max(1, item.date.timeIntervalSinceNow), repeats: false)
             try await center.add(UNNotificationRequest(identifier: item.id, content: content, trigger: trigger))
         }

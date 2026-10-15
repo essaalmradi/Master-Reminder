@@ -10,4 +10,4 @@ swift scripts/make-icon.swift dist/AppIcon.iconset
 iconutil --convert icns dist/AppIcon.iconset --output "$APP/Contents/Resources/AppIcon.icns"
 plutil -lint "$APP/Contents/Info.plist"
 file "$APP/Contents/MacOS/MasterReminder"
-lipo -verify_arch arm64 "$APP/Contents/MacOS/MasterReminder"
+lipo "$APP/Contents/MacOS/MasterReminder" -verify_arch arm64

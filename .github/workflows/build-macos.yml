@@ -66,6 +66,7 @@ jobs:
             dist/codesign.txt
             dist/tests.log
             dist/smoke-results.json
+            dist/dashboard.png
           if-no-files-found: error
           retention-days: 30
       - name: Upload diagnostic logs
