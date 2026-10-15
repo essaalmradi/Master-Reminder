@@ -1,0 +1,85 @@
+name: Build signed macOS app
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: macos-personal-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  build:
+    name: Test, sign and package arm64
+    runs-on: macos-15
+    timeout-minutes: 30
+    env:
+      MACOSX_DEPLOYMENT_TARGET: '13.0'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Inspect toolchain
+        run: |
+          swift --version
+          xcodebuild -version
+          uname -m
+      - name: Build Release (Apple Silicon)
+        run: |
+          mkdir -p dist
+          set -o pipefail
+          swift build -c release --arch arm64 2>&1 | tee dist/build.log
+      - name: Run unit tests
+        run: |
+          set -o pipefail
+          swift test --parallel 2>&1 | tee dist/tests.log
+      - name: Assemble app bundle and icon
+        run: bash scripts/bundle.sh
+      - name: Sign with Developer ID Application
+        env:
+          MACOS_CERTIFICATE_P12: ${{ secrets.MACOS_CERTIFICATE_P12 }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+        run: bash scripts/sign.sh
+      - name: Exercise real app runtime
+        run: bash scripts/smoke.sh
+      - name: Create and verify DMG
+        run: bash scripts/dmg.sh
+      - name: Write build evidence
+        run: |
+          python3 - <<'PY'
+          import json, os, pathlib
+          info = {'version': '0.1.0', 'build': 1, 'sha': os.environ['GITHUB_SHA'],
+                  'run_id': os.environ['GITHUB_RUN_ID'], 'team_id': 'KTA6FSZK9V',
+                  'architecture': 'arm64', 'notarized': False,
+                  'codesign_verified': True, 'minimum_macos': '13.0'}
+          pathlib.Path('dist/build-info.json').write_text(json.dumps(info, indent=2))
+          PY
+          echo '### Signed personal macOS build' >> "$GITHUB_STEP_SUMMARY"
+          echo 'DMG: Master-Reminder-0.1.0.dmg — arm64, macOS 13+' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Developer ID team: KTA6FSZK9V. Not notarized (intentional).' >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload installable artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Master-Reminder-0.1.0-macOS-arm64
+          path: |
+            dist/Master-Reminder-0.1.0.dmg
+            dist/SHA256SUMS.txt
+            dist/build-info.json
+            dist/codesign.txt
+            dist/tests.log
+            dist/smoke-results.json
+          if-no-files-found: error
+          retention-days: 30
+      - name: Upload diagnostic logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: macOS-build-diagnostics
+          path: |
+            dist/build.log
+            dist/tests.log
+            dist/runtime-smoke.log
+          retention-days: 7
+      - name: Cleanup signing material
+        if: always()
+        run: |
+          security delete-keychain "$RUNNER_TEMP/master-reminder-signing.keychain-db" >/dev/null 2>&1 || true
+          rm -f "$RUNNER_TEMP/master-reminder-certificate.p12"
