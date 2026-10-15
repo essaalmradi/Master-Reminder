@@ -38,8 +38,10 @@ jobs:
           assert devices, 'No iOS 26 iPhone simulator available'
           device=next((d for d in devices if d['name']=='iPhone 16 Pro'), devices[0])
           with open(os.environ['GITHUB_ENV'],'a') as f: f.write('SIM_ID='+device['udid']+'\n')
+          with open('dist-ios/sim-id.txt','w') as f: f.write(device['udid'])
           print(device['name'])
           PY
+          SIM_ID="$(cat dist-ios/sim-id.txt)"
           xcrun simctl boot "$SIM_ID" || true
           xcrun simctl bootstatus "$SIM_ID" -b
           xcodebuild -project iOS/MasterReminderPhone.xcodeproj -scheme MasterReminderPhone -destination "platform=iOS Simulator,id=$SIM_ID" -derivedDataPath build-ios-sim -resultBundlePath dist-ios/PhoneUITests.xcresult CODE_SIGNING_ALLOWED=NO test 2>&1 | tee dist-ios/simulator-tests.log
