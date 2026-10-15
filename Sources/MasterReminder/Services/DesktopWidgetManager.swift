@@ -38,7 +38,7 @@ private final class DesktopPanel: NSPanel {
         panel.isMovableByWindowBackground = true; panel.hidesOnDeactivate = false; panel.isReleasedWhenClosed = false
         panel.level = floatOnTop ? .floating : .normal
         panel.collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle]
-        panel.identifier = NSUserInterfaceItemIdentifier(kind.rawValue); panel.delegate = self
+        panel.identifier = NSUserInterfaceItemIdentifier(kind.rawValue)
         panel.contentView = NSHostingView(rootView: DesktopWidgetContainer(kind: kind, model: model, manager: self))
         let screen = NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
         let i = CGFloat(SpiritualWidgetKind.allCases.firstIndex(of: kind) ?? 0)
@@ -49,11 +49,21 @@ private final class DesktopPanel: NSPanel {
             let rect = NSRectFromString(saved)
             if NSScreen.screens.contains(where: { $0.visibleFrame.intersects(rect) }) { panel.setFrameOrigin(rect.origin) }
         }
+        // Attach the delegate only after restoration so initial positioning cannot overwrite saved coordinates.
+        panel.delegate = self
         panels[kind] = panel; enabled.insert(kind); panel.orderFrontRegardless()
     }
     func windowDidMove(_ notification: Notification) {
         guard let window = notification.object as? NSWindow, let id = window.identifier?.rawValue else { return }
         defaults.set(NSStringFromRect(window.frame), forKey: "widget-frame-\(id)")
+    }
+    func checkPositionRestorationForSmoke() async -> Bool {
+        guard model?.isSmoke == true, let panel = panels[.dhikr] else { return false }
+        let point = NSPoint(x: panel.frame.origin.x - 20, y: panel.frame.origin.y - 20)
+        panel.setFrameOrigin(point)
+        try? await Task.sleep(nanoseconds: 150_000_000)
+        set(.dhikr, visible: false); set(.dhikr, visible: true)
+        return panels[.dhikr]?.frame.origin == point
     }
     func closeAll() { for panel in panels.values { panel.close() }; panels.removeAll(); enabled.removeAll() }
 }

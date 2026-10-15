@@ -354,6 +354,7 @@ enum Page: String, CaseIterable, Identifiable {
         results["audioSampleDecodes"] = (try? AVAudioPlayer(contentsOf: AppResources.url("dhikr-sample", "mp3")!)) != nil
         newReminder(); results["creationWizard"] = isCreating; isCreating = false
         widgets.set(.dhikr, visible: true); results["desktopWidgetCreated"] = widgets.count == 1
+        results["widgetPositionRestored"] = await widgets.checkPositionRestorationForSmoke()
         widgets.setFloating(true); results["widgetFloating"] = widgets.floatOnTop
         widgets.set(.dhikr, visible: false); results["widgetRemoved"] = widgets.count == 0
         widgets.setFloating(false)
