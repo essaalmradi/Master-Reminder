@@ -17,6 +17,8 @@ struct SpiritualProvider: TimelineProvider {
 }
 struct DailySpiritualWidget: Widget {
     let kind: SpiritualWidgetKind
+    init() { kind = .date }
+    init(kind: SpiritualWidgetKind) { self.kind = kind }
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: "master-" + kind.rawValue, provider: SpiritualProvider()) { entry in
             SpiritualWidgetView(kind: kind, date: entry.date, compact: true)
