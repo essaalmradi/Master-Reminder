@@ -7,3 +7,10 @@ dist/
 *.mobileprovision
 .DS_Store
 *.xcuserstate
+
+build-ios*/
+dist-ios/
+iOS/*.xcodeproj/
+iOS/App/Assets.xcassets/
+iOS/App/Info.plist
+iOS/Widgets/Info.plist

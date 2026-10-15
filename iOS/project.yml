@@ -1,0 +1,88 @@
+name: MasterReminderPhone
+options:
+  bundleIdPrefix: ly.masterlibya
+  deploymentTarget:
+    iOS: '26.0'
+packages:
+  MasterReminder:
+    path: ..
+settings:
+  base:
+    SWIFT_VERSION: '5.0'
+    DEVELOPMENT_TEAM: KTA6FSZK9V
+    MARKETING_VERSION: 0.2.0
+    CURRENT_PROJECT_VERSION: 2
+    TARGETED_DEVICE_FAMILY: '1'
+    CODE_SIGN_STYLE: Manual
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+targets:
+  MasterReminderPhone:
+    type: application
+    platform: iOS
+    sources:
+      - App
+      - Shared
+    dependencies:
+      - package: MasterReminder
+        product: ReminderCore
+      - package: MasterReminder
+        product: ReminderDesign
+      - target: MasterReminderWidgets
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: ly.masterlibya.masterreminder.ios
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
+    info:
+      path: App/Info.plist
+      properties:
+        CFBundleDisplayName: Master Reminder
+        CFBundleDevelopmentRegion: ar
+        CFBundleLocalizations: [ar]
+        NSAlarmKitUsageDescription: نستخدم المنبّهات لتذكيرك بالأذكار والصلاة والمواعيد التي تختارها، حتى والهاتف مقفل.
+        NSSupportsLiveActivities: true
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+        CFBundleURLTypes:
+          - CFBundleURLName: ly.masterlibya.masterreminder
+            CFBundleURLSchemes: [masterreminder]
+  MasterReminderWidgets:
+    type: app-extension
+    platform: iOS
+    sources: [Widgets, Shared]
+    dependencies:
+      - package: MasterReminder
+        product: ReminderCore
+      - package: MasterReminder
+        product: ReminderDesign
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: ly.masterlibya.masterreminder.ios.widgets
+        APPLICATION_EXTENSION_API_ONLY: YES
+        SKIP_INSTALL: YES
+    info:
+      path: Widgets/Info.plist
+      properties:
+        CFBundleDisplayName: Master Reminder
+        CFBundleDevelopmentRegion: ar
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+  MasterReminderPhoneUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources: [Tests]
+    dependencies:
+      - target: MasterReminderPhone
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: ly.masterlibya.masterreminder.ios.uitests
+        GENERATE_INFOPLIST_FILE: YES
+schemes:
+  MasterReminderPhone:
+    build:
+      targets:
+        MasterReminderPhone: all
+        MasterReminderPhoneUITests: [test]
+    test:
+      targets: [MasterReminderPhoneUITests]
+      gatherCoverageData: false

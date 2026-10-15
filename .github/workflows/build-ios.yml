@@ -1,0 +1,57 @@
+name: Build and verify iPhone app
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['iOS/**', 'Sources/ReminderCore/**', 'Sources/ReminderDesign/**', 'Package.swift', 'scripts/ios-*', '.github/workflows/build-ios.yml']
+permissions:
+  contents: read
+concurrency:
+  group: ios-personal-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  build:
+    runs-on: macos-26
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare Xcode project
+        run: |
+          mkdir -p dist-ios
+          xcodebuild -version
+          brew install xcodegen
+          swift scripts/ios-icon.swift
+          xcodegen generate --spec iOS/project.yml
+      - name: Build for iPhone without distribution signing
+        run: |
+          set -o pipefail
+          xcodebuild -project iOS/MasterReminderPhone.xcodeproj -scheme MasterReminderPhone -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath build-ios CODE_SIGNING_ALLOWED=NO build 2>&1 | tee dist-ios/device-build.log
+          ditto -c -k --keepParent build-ios/Build/Products/Release-iphoneos/MasterReminderPhone.app dist-ios/Master-Reminder-0.2.0-iPhone-UNSIGNED.app.zip
+      - name: Test on iPhone simulator
+        run: |
+          set -o pipefail
+          xcrun simctl list devices available -j > dist-ios/simulators.json
+          python3 - <<'PY'
+          import json, os
+          data=json.load(open('dist-ios/simulators.json'))
+          devices=[d for runtime, ds in data['devices'].items() if 'iOS-26' in runtime for d in ds if 'iPhone' in d['name'] and d['isAvailable']]
+          assert devices, 'No iOS 26 iPhone simulator available'
+          device=next((d for d in devices if d['name']=='iPhone 16 Pro'), devices[0])
+          with open(os.environ['GITHUB_ENV'],'a') as f: f.write('SIM_ID='+device['udid']+'\n')
+          print(device['name'])
+          PY
+          xcrun simctl boot "$SIM_ID" || true
+          xcrun simctl bootstatus "$SIM_ID" -b
+          xcodebuild -project iOS/MasterReminderPhone.xcodeproj -scheme MasterReminderPhone -destination "platform=iOS Simulator,id=$SIM_ID" -derivedDataPath build-ios-sim -resultBundlePath dist-ios/PhoneUITests.xcresult CODE_SIGNING_ALLOWED=NO test 2>&1 | tee dist-ios/simulator-tests.log
+          xcrun simctl io "$SIM_ID" screenshot dist-ios/iPhone-home.png
+          xcrun xcresulttool export attachments --path dist-ios/PhoneUITests.xcresult --output-path dist-ios/screenshots || true
+      - name: Explain signing status
+        run: |
+          echo 'UNSIGNED build: not installable on a physical iPhone. Requires registered device + Apple Distribution P12 + app and widget Ad Hoc profiles.' > dist-ios/INSTALLATION-STATUS.txt
+          echo 'Simulator UI tests do not verify real-device AlarmKit authorization, ringing, Focus/Silent behavior or widget delivery.' >> dist-ios/INSTALLATION-STATUS.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Master-Reminder-0.2.0-iPhone-build-evidence
+          path: dist-ios/
+          retention-days: 30

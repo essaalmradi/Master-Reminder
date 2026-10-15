@@ -3,6 +3,7 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
+    paths-ignore: ['iOS/**', '.github/workflows/build-ios.yml', 'scripts/ios-*', 'README.md']
 permissions:
   contents: read
 concurrency:
