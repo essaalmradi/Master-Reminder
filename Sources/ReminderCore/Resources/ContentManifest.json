@@ -1,0 +1,15 @@
+{
+  "counts": {
+    "quranVerses": 6236,
+    "surahs": 114,
+    "hisnTexts": 267,
+    "hisnChapters": 132,
+    "nawawi": 42
+  },
+  "retrieved": "2026-10-15",
+  "sourceSHA256": {
+    "quran-tanzil": "f3268cfe7a400add8a8024fe23368d66f58cc8baa51773fe94e323625c66344b",
+    "hisn-github": "ee0df147cc9fdcbc8bed542703ba2d43f70329baa4d8ee7a99adf7929112a65f",
+    "nawawi": "91f559b90422005b768bb449426d87d2e6fabbb43ac3a31e5c24c50ca77465e6"
+  }
+}

@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import ReminderDesign
 import ReminderCore
 
 private final class ReminderPanel: NSPanel {
@@ -72,14 +73,14 @@ private struct OverlayView: View {
         ZStack {
             Color.black.opacity(opacity).ignoresSafeArea()
             VStack(spacing: 24) {
-                Image(systemName: occurrence.reminder.type.symbol).font(.system(size: 48, weight: .light)).foregroundStyle(Color.teal)
-                Text("حان الوقت").font(.title3).foregroundStyle(.white.opacity(0.65))
-                Text(occurrence.reminder.title).font(.system(size: 42, weight: .semibold)).multilineTextAlignment(.center)
+                Image(systemName: occurrence.reminder.type.symbol).font(.system(size: 48, weight: .light)).foregroundStyle(Brand.ocean)
+                Text("حان الوقت").font(Brand.font(21)).foregroundStyle(.white.opacity(0.65))
+                Text(occurrence.reminder.title).font(Brand.font(42)).multilineTextAlignment(.center)
                 if !occurrence.reminder.detail.isEmpty {
-                    Text(occurrence.reminder.detail).font(.title2).foregroundStyle(.white.opacity(0.8)).multilineTextAlignment(.center)
+                    ScrollView { Text(occurrence.reminder.detail).font(Brand.font(26)).lineSpacing(10).foregroundStyle(.white.opacity(0.85)).multilineTextAlignment(.center).frame(maxWidth: .infinity) }.frame(maxHeight: 330)
                 }
                 HStack(spacing: 16) {
-                    Button("تم", action: done).buttonStyle(.borderedProminent).tint(.teal).keyboardShortcut(.defaultAction)
+                    Button("تم", action: done).buttonStyle(.borderedProminent).tint(Brand.ocean).keyboardShortcut(.defaultAction)
                     if occurrence.reminder.snoozeAllowed {
                         Button("تأجيل \(defaultSnooze) دقائق") { snooze(defaultSnooze) }.buttonStyle(.bordered)
                         Menu("خيارات التأجيل") {
@@ -89,6 +90,6 @@ private struct OverlayView: View {
                 }.controlSize(.large).padding(.top, 12)
                 Button("إغلاق · Esc", action: done).buttonStyle(.plain).foregroundStyle(.white.opacity(0.65)).padding(.top, 12)
             }.foregroundStyle(.white).padding(48).frame(maxWidth: 850)
-        }.preferredColorScheme(.dark)
+        }.font(Brand.font(17)).preferredColorScheme(.dark)
     }
 }

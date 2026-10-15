@@ -1,0 +1,139 @@
+/* Master Libya — brand tokens. Font path is relative to this file (assets/). */
+:root, [data-theme="light"] {
+  --night: #010e16; /* Signature gradient top stop. Deep-night grounds, end cards, app-icon squircle. */
+  --navy: #044670; /* Signature gradient. Deep brand fields, wordmark gradient end on light grounds. */
+  --ocean: #085c8f; /* Primary brand blue. Buttons and links on light grounds (7.0:1 on surface-page); white text on it passes (7.1:1). */
+  --blue: #1f79ad; /* Secondary brand blue. White text on it passes (4.8:1). Not for text on dark grounds (3.9:1). */
+  --sky: #61bceb; /* Glows, highlights, charts. Night text on it passes (9.2:1). Never text on light grounds (2.1:1). */
+  --ice: #a4e0ff; /* Signature gradient light stop. Tints, light specks, frosted-glass edges. */
+  --surface-page: #fdfdfb; /* Page background. */
+  --surface-panel: #ffffff; /* Cards, panels and frosted-glass fills over surface-page. */
+  --ink: #010e16; /* Primary text on surface-page and surface-panel. */
+  --ink-muted: #3e5566; /* Secondary text and captions on surface-page / surface-panel (7.6:1 light, 8.4:1 dark). */
+  --accent-text: #085c8f; /* Links and accent text on surface-page / surface-panel. Dark value is the brief's accent on dark (11.3:1). */
+  --hairline: #d7e3eb; /* Decorative dividers and construction lines only — not for control borders. */
+  --cover-slab: var(--night); /* Largest cover block: night on light grounds, navy on dark so it stays visible. */
+  --mascot-armor: #011544; /* Master Ai: midnight navy glossy armor (sampled from the reference torso). */
+  --mascot-faceplate: #030713; /* Master Ai: black reflective glass faceplate. */
+  --mascot-eye: #99f1fd; /* Master Ai: cyan glowing digital eyes and mouth. */
+  --mascot-edge-glow: #4ab2f1; /* Master Ai: electric-blue neon edge illumination (boot rims, seams). */
+  --mascot-crystal: #004ad0; /* Master Ai: translucent sapphire crystalline fins, mid-tone. */
+  --mascot-emblem: #fbfbfb; /* Master Ai: white chest A emblem. */
+  --mascot-stage: #041337; /* Master Ai: deep blue studio backdrop of the reference sheet. */
+  --sub-call: #0174ba; /* Master Call sub-brand accent (from its logo gradient). Within the master blue family. */
+  --sub-media: #a900d4; /* Master Media sub-brand accent only — never on master-brand surfaces. */
+  --sub-academy: #f18944; /* Master Academy sub-brand accent only — never on master-brand surfaces. */
+  --sub-ads: #7754a2; /* Master Ads sub-brand accent only (its indigo-violet) — never on master-brand surfaces. */
+  --sub-pay: #00bf6c; /* Master Pay sub-brand accent only — never on master-brand surfaces. */
+  --tagline-fade: #3f5d75; /* Tagline lockup gradient: where لبنـــاء emerges from the background (sampled from the official artwork). */
+  --tagline-mid: #a6cae4; /* Tagline lockup gradient: mid stop around مستقبل (sampled). */
+  --tagline-bright: #ffffff; /* Tagline lockup gradient: full white at أفضل and on the first line. */
+  --glow-sky: 0 0 32px rgba(97, 188, 235, 0.45); /* Soft blue glow under hero elements on dark grounds. */
+  --glow-mascot: 0 0 24px rgba(74, 178, 241, 0.6); /* Master Ai neon-edge halo when compositing him on a scene. */
+}
+[data-theme="dark"] {
+  --surface-page: #09131c;
+  --surface-panel: #0e1c27;
+  --ink: #ffffff;
+  --ink-muted: #a4b8c6;
+  --accent-text: #7ed3fd;
+  --hairline: #1f3342;
+  --cover-slab: var(--navy);
+}
+:root {
+  --space-1: 4px; /* Icon-to-label gaps. */
+  --space-2: 8px; /* Tight stacks, chip padding. */
+  --space-4: 16px; /* Card padding, control padding. */
+  --space-6: 24px; /* Gaps between cards. */
+  --space-8: 32px; /* Section padding; cover pattern pitch. */
+  --space-16: 64px; /* Generous section breaks — one idea per frame. */
+  --radius-sm: 8px; /* Inputs, small chips. */
+  --radius-md: 16px; /* Buttons, cards. */
+  --radius-lg: 24px; /* Large panels, frosted-glass sheets, cover blocks. */
+  --radius-squircle: 23%; /* App icon squircle (~23% of the side). */
+  --radius-pill: 9999px; /* Pills and tags. */
+  --font-arabic: "The Year of Handicrafts", "Hepta Slab", Inter, sans-serif;
+  --font-latin: "Hepta Slab", Georgia, serif;
+  --font-ui: Inter, system-ui, sans-serif;
+  --text-ar-display: 400 64px/104px var(--font-arabic);
+  --text-ar-headline: 400 40px/64px var(--font-arabic);
+  --text-ar-title: 400 28px/44px var(--font-arabic);
+  --text-ar-body: 400 18px/32px var(--font-arabic);
+  --text-ar-label: 400 14px/24px var(--font-arabic);
+  --text-latin-display: 800 64px/64px var(--font-latin);
+  --text-latin-headline: 700 36px/44px var(--font-latin);
+  --text-latin-body: 400 16px/24px var(--font-latin);
+  --text-latin-label: 600 13px/18px var(--font-latin);
+}
+.ar-display {
+  font-family: var(--font-arabic);
+  font-size: 64px;
+  line-height: 104px;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+.ar-headline {
+  font-family: var(--font-arabic);
+  font-size: 40px;
+  line-height: 64px;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+.ar-title {
+  font-family: var(--font-arabic);
+  font-size: 28px;
+  line-height: 44px;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+.ar-body {
+  font-family: var(--font-arabic);
+  font-size: 18px;
+  line-height: 32px;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+.ar-label {
+  font-family: var(--font-arabic);
+  font-size: 14px;
+  line-height: 24px;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+.latin-display {
+  font-family: var(--font-latin);
+  font-size: 64px;
+  line-height: 64px;
+  font-weight: 800;
+  letter-spacing: 0;
+}
+.latin-headline {
+  font-family: var(--font-latin);
+  font-size: 36px;
+  line-height: 44px;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+.latin-body {
+  font-family: var(--font-latin);
+  font-size: 16px;
+  line-height: 24px;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+.latin-label {
+  font-family: var(--font-latin);
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+@font-face {
+  font-family: "The Year of Handicrafts";
+  src: url("fonts/TheYearofHandicrafts-Regular.otf") format("opentype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+/* Arabic face ships in one weight only — never let the browser fake bold or italic */
+[lang="ar"], .ar-display, .ar-headline, .ar-title, .ar-body, .ar-label { font-synthesis: none; }

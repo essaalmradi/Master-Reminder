@@ -1,74 +1,76 @@
 import SwiftUI
 import ReminderCore
+import ReminderDesign
 
 struct DashboardView: View {
     @EnvironmentObject var model: AppModel
+    @Environment(\.colorScheme) private var scheme
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 26) {
-                HStack {
-                    SectionHeading(title: "وقتك يستحق انتباهك", subtitle: Date().formatted(.dateTime.weekday(.wide).day().month(.wide)))
-                    Button { model.newReminder() } label: { Label("تذكير جديد", systemImage: "plus") }.buttonStyle(.borderedProminent)
+            VStack(alignment: .leading, spacing: 24) {
+                HStack(alignment: .center) {
+                    SectionHeading(title: "مساحة هادئة ليومك", subtitle: "ذكّر قلبك، ورتّب وقتك، وابدأ بلحظة.")
+                    VStack(alignment: .trailing, spacing: 5) { Text(Date(), format: .dateTime.weekday(.wide)).font(Brand.font(22)); Text(Date(), format: .dateTime.day().month(.wide).year()).font(Brand.font(13)).foregroundStyle(.secondary) }
                 }
-                nextCard
-                HStack(spacing: 14) {
-                    StatusCard(title: "الإشعارات", symbol: "bell", value: model.notifications.statusText)
-                    StatusCard(title: "التشغيل عند الدخول", symbol: "power", value: model.login.statusText)
-                    StatusCard(title: "الحالة", symbol: "checkmark.circle", value: model.settings.isPaused(at: Date()) ? "متوقف مؤقتًا" : "جاهز للتذكير")
+                HStack(spacing: 18) {
+                    hero.frame(maxWidth: .infinity)
+                    SpiritualWidgetView(kind: .dhikr).frame(width: 258, height: 246)
                 }
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack { Text("بقية اليوم").font(.title3.weight(.semibold)); Spacer(); Button("كل التذكيرات") { model.page = .reminders }.buttonStyle(.plain).foregroundStyle(.teal) }
-                    let today = model.upcoming.filter { Calendar.current.isDateInToday($0.date) }
-                    if today.isEmpty { Text("لا توجد مواعيد أخرى اليوم. خذ وقتك.").foregroundStyle(.secondary).padding(.vertical, 24) }
-                    ForEach(Array(today.prefix(8))) { item in ReminderRow(reminder: item.reminder, date: item.date); Divider() }
+                HStack(spacing: 16) {
+                    metric("تذكيرات مفعّلة", value: "\(model.allReminders.filter(\.enabled).count)", icon: "bell")
+                    metric("نصوص في مكتبتك", value: "6,545", icon: "books.vertical")
+                    metric("ويدجت على المكتب", value: "\(model.widgets.count)", icon: "rectangle.3.group")
                 }
                 HStack {
-                    Button("تجربة التذكير بعد 10 ثوانٍ") { model.testReminder() }
-                    Button("تجربة الإشعار") { model.testNotification() }
-                    Button("تجربة الشاشة") { model.testOverlay() }
-                }.controlSize(.regular)
-                Text("أغلق النافذة وواصل عملك. التذكيرات تبقى بجانب الساعة.").font(.caption).foregroundStyle(.secondary)
-            }.padding(32)
-        }
-        .onReceive(model.notifications.objectWillChange) { _ in model.objectWillChange.send() }
-        .onReceive(model.login.objectWillChange) { _ in model.objectWillChange.send() }
-    }
-    private var nextCard: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            Label("الموعد القادم", systemImage: "clock").font(.subheadline).foregroundStyle(.secondary)
-            if let next = model.upcoming.first {
-                HStack {
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text(next.reminder.title).font(.system(size: 34, weight: .medium))
-                        HStack { Text("متبقٍ"); Text(next.date, style: .relative).monospacedDigit() }.font(.title3).foregroundStyle(.teal)
-                        Text(next.reminder.type.title).font(.caption).foregroundStyle(.secondary)
-                    }
+                    Text("ماذا تريد أن تتذكر؟").font(Brand.font(23))
                     Spacer()
-                    Image(systemName: next.reminder.type.symbol).font(.system(size: 64, weight: .ultraLight)).foregroundStyle(.teal.opacity(0.7)).padding(12)
+                    Button("استكشف المكتبة") { model.page = .library }.buttonStyle(.plain).foregroundStyle(Brand.accent(scheme)).font(Brand.font(14))
                 }
-            } else {
-                Text("ابدأ بموعد واحد").font(.largeTitle.weight(.medium))
-                Text("صلاة، اجتماع، أو استراحة صغيرة. سنذكّرك في وقتها.").foregroundStyle(.secondary)
-                Button("إضافة أول تذكير") { model.newReminder() }
-            }
-            if model.settings.isPaused(at: Date()), let until = model.settings.pausedUntil {
-                HStack { Text("متوقف حتى"); Text(until, style: .time); Spacer(); Button("استئناف الآن") { model.resume() } }.font(.callout)
-            }
-        }.padding(28).frame(maxWidth: .infinity, minHeight: 210, alignment: .leading)
-            .background(Color.teal.opacity(0.06), in: RoundedRectangle(cornerRadius: 20))
-            .overlay(RoundedRectangle(cornerRadius: 20).stroke(Color.teal.opacity(0.15), lineWidth: 1))
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 4), spacing: 12) {
+                    ForEach([SpiritualCategory.dhikr, .quran, .dua, .tasbih]) { category in
+                        Button { if category == .tasbih { model.page = .tasbih } else { model.newReminder() } } label: {
+                            HStack(spacing: 10) { Image(systemName: category.type.symbol).foregroundStyle(Brand.accent(scheme)); Text(category.title).font(Brand.font(16)); Spacer() }
+                                .padding(16).frame(maxWidth: .infinity).background(Brand.panel(scheme), in: RoundedRectangle(cornerRadius: 16))
+                                .overlay(RoundedRectangle(cornerRadius: 16).stroke(Brand.line(scheme)))
+                        }.buttonStyle(.plain)
+                    }
+                }
+                BrandCard {
+                    VStack(alignment: .leading, spacing: 14) {
+                        HStack { Text("المواعيد القادمة").font(Brand.font(23)); Spacer(); Button("عرض الكل") { model.page = .reminders }.buttonStyle(.plain).font(Brand.font(14)).foregroundStyle(Brand.accent(scheme)) }
+                        if model.upcoming.isEmpty {
+                            HStack(spacing: 14) { Image(systemName: "calendar.badge.plus").font(.title).foregroundStyle(Brand.accent(scheme)); VStack(alignment: .leading, spacing: 5) { Text("ابدأ بتذكير تحبّه").font(Brand.font(19)); Text("ذكر الصباح، آية، أو دعاء في الوقت المناسب لك.").font(Brand.font(14)).foregroundStyle(.secondary) }; Spacer() }.padding(.vertical, 12)
+                        } else { ForEach(Array(model.upcoming.prefix(3))) { item in ReminderRow(reminder: item.reminder, date: item.date) } }
+                    }
+                }
+                HStack(spacing: 12) {
+                    Image(systemName: "waveform").foregroundStyle(Brand.accent(scheme))
+                    VStack(alignment: .leading, spacing: 4) { Text("اسمع التجربة").font(Brand.font(18)); Text("ذكر مسجّل من حصن المسلم، يعمل بدون إنترنت.").font(Brand.font(13)).foregroundStyle(.secondary) }
+                    Spacer()
+                    Button("استمع") { model.testSound() }.buttonStyle(BrandButton())
+                    Button("إيقاف") { model.sounds.stop() }.font(Brand.font(14))
+                }.padding(.horizontal, 6)
+            }.padding(30)
+        }
     }
-}
-
-private struct StatusCard: View {
-    let title: String
-    let symbol: String
-    let value: String
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Label(title, systemImage: symbol).font(.caption).foregroundStyle(.secondary)
-            Text(value).font(.callout.weight(.medium))
-        }.frame(maxWidth: .infinity, minHeight: 58, alignment: .leading).padding(16)
-            .background(Color.secondary.opacity(0.05), in: RoundedRectangle(cornerRadius: 12))
+    private var hero: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Label(model.upcoming.isEmpty ? "لحظتك الأولى" : "التذكير القادم", systemImage: "sparkles").font(Brand.font(14)).foregroundStyle(Brand.ice)
+            Text(model.upcoming.first?.reminder.title ?? "اجعل للذكر وقتًا").font(Brand.font(32)).lineLimit(2).minimumScaleFactor(0.7)
+            if let next = model.upcoming.first {
+                HStack { Text(next.date, style: .time).font(Brand.number(27)); Text("·"); Text(next.date, style: .relative).font(Brand.font(16)) }.foregroundStyle(Brand.ice)
+            } else { Text("خطوة صغيرة، وأثر يبقى معك طوال اليوم.").font(Brand.font(16)).foregroundStyle(.white.opacity(0.8)) }
+            Spacer(minLength: 0)
+            HStack {
+                Button { model.newReminder() } label: { Label("أضف تذكيرًا", systemImage: "plus").font(Brand.font(15)).padding(.horizontal, 18).padding(.vertical, 9).background(.white, in: Capsule()).foregroundStyle(Brand.ocean) }.buttonStyle(.plain)
+                Spacer()
+                Button("جرّب الآن") { model.testReminder() }.buttonStyle(.plain).font(Brand.font(15)).foregroundStyle(Brand.ice)
+            }
+        }.padding(26).frame(maxWidth: .infinity, minHeight: 194, maxHeight: 194, alignment: .leading).foregroundStyle(.white)
+            .background(Brand.gradient, in: RoundedRectangle(cornerRadius: 26))
+    }
+    private func metric(_ title: String, value: String, icon: String) -> some View {
+        HStack(spacing: 12) { Image(systemName: icon).foregroundStyle(Brand.accent(scheme)); VStack(alignment: .leading, spacing: 5) { Text(value).font(Brand.number(22)); Text(title).font(Brand.font(13)).foregroundStyle(.secondary) }; Spacer(minLength: 0) }
+            .padding(18).frame(maxWidth: .infinity).background(Brand.panel(scheme), in: RoundedRectangle(cornerRadius: 18)).overlay(RoundedRectangle(cornerRadius: 18).stroke(Brand.line(scheme)))
     }
 }

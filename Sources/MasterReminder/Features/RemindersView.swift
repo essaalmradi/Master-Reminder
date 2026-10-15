@@ -2,6 +2,7 @@ import SwiftUI
 import AppKit
 import UniformTypeIdentifiers
 import ReminderCore
+import ReminderDesign
 
 struct RemindersView: View {
     @EnvironmentObject var model: AppModel
@@ -20,7 +21,7 @@ struct RemindersView: View {
             TextField("ابحث عن تذكير", text: $query).textFieldStyle(.roundedBorder)
             if filtered.isEmpty {
                 Spacer()
-                VStack(spacing: 14) { Image(systemName: "bell").font(.system(size: 40, weight: .light)).foregroundStyle(.teal); Text("لا توجد تذكيرات هنا بعد").font(.title3); Text("أضف شيئًا تريد أن تتذكره.").foregroundStyle(.secondary) }.frame(maxWidth: .infinity)
+                VStack(spacing: 14) { Image(systemName: "bell").font(.system(size: 40, weight: .light)).foregroundStyle(Brand.ocean); Text("لا توجد تذكيرات هنا بعد").font(Brand.font(21)); Text("أضف شيئًا تريد أن تتذكره.").foregroundStyle(.secondary) }.frame(maxWidth: .infinity)
                 Spacer()
             } else {
                 List {
@@ -32,18 +33,18 @@ struct RemindersView: View {
                                 Button { model.editing = reminder } label: { Image(systemName: "pencil") }.help("تعديل")
                                 Button(role: .destructive) { deleting = reminder } label: { Image(systemName: "trash") }.help("حذف")
                             }
-                            if !reminder.detail.isEmpty { Text(reminder.detail).font(.caption).foregroundStyle(.secondary).lineLimit(2) }
+                            if !reminder.detail.isEmpty { Text(reminder.detail).font(Brand.font(14)).foregroundStyle(.secondary).lineLimit(2) }
                             HStack(spacing: 12) {
                                 Text(reminder.date, style: .date)
                                 Text(reminder.preAlertMinutes == 0 ? "بدون تنبيه مسبق" : "قبل \(reminder.preAlertMinutes) دقائق")
                                 Label(reminder.sound.title, systemImage: "speaker.wave.2")
                                 if reminder.overlay { Label("شاشة تنبيه", systemImage: "rectangle") }
-                            }.font(.caption2).foregroundStyle(.secondary)
+                            }.font(Brand.font(12)).foregroundStyle(.secondary)
                         }.padding(.vertical, 8).opacity(reminder.enabled ? 1 : 0.55)
                     }
                 }.listStyle(.inset)
             }
-            Text("تذكيرات مواقيت الصلاة تُدار من قسم الصلاة.").font(.caption).foregroundStyle(.secondary)
+            Text("تذكيرات مواقيت الصلاة تُدار من قسم الصلاة.").font(Brand.font(14)).foregroundStyle(.secondary)
         }.padding(32)
         .alert("حذف التذكير؟", isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } })) {
             Button("حذف", role: .destructive) { if let deleting { model.deleteReminder(deleting) }; deleting = nil }
@@ -61,7 +62,7 @@ struct ReminderEditor: View {
     private let weekdays = ["الأحد", "الإثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"]
     var body: some View {
         VStack(spacing: 0) {
-            HStack { Text("تفاصيل التذكير").font(.title2.weight(.semibold)); Spacer(); Button("إلغاء") { dismiss() } }.padding(24)
+            HStack { Text("تفاصيل التذكير").font(Brand.font(24)); Spacer(); Button("إلغاء") { dismiss() } }.padding(24)
             Form {
                 Section("الموعد") {
                     TextField("العنوان", text: $reminder.title)
@@ -100,12 +101,12 @@ struct ReminderEditor: View {
             }.formStyle(.grouped)
             Divider()
             HStack {
-                Text("التوقيت حسب إعدادات الماك").font(.caption).foregroundStyle(.secondary)
+                Text("التوقيت حسب إعدادات الماك").font(Brand.font(14)).foregroundStyle(.secondary)
                 Spacer()
                 Button("حفظ التذكير") { save() }.buttonStyle(.borderedProminent).keyboardShortcut(.defaultAction)
                     .disabled(reminder.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }.padding(20)
-        }.frame(width: 580, height: 690).environment(\.layoutDirection, .rightToLeft).tint(.teal)
+        }.font(Brand.font(16)).frame(width: 660, height: 690).environment(\.layoutDirection, .rightToLeft).tint(Brand.ocean)
         .onAppear { preSelection = [0, 5, 10, 15, 30].contains(reminder.preAlertMinutes) ? reminder.preAlertMinutes : -1 }
         .onDisappear { model.sounds.stop() }
     }

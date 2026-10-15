@@ -1,4 +1,5 @@
 import SwiftUI
+import ReminderDesign
 
 struct OnboardingView: View {
     @ObservedObject var model: AppModel
@@ -14,12 +15,12 @@ struct OnboardingView: View {
     private let icons = ["bell.badge", "clock", "app.badge", "power", "plus.circle"]
     var body: some View {
         VStack(spacing: 26) {
-            Image(systemName: icons[step]).font(.system(size: 54, weight: .ultraLight)).foregroundStyle(.teal)
-            Text(titles[step]).font(.system(size: 31, weight: .semibold)).multilineTextAlignment(.center)
-            Text(descriptions[step]).font(.body).foregroundStyle(.secondary).multilineTextAlignment(.center).lineSpacing(5)
+            Image(systemName: icons[step]).font(.system(size: 54, weight: .ultraLight)).foregroundStyle(Brand.ocean)
+            Text(titles[step]).font(Brand.font(31)).multilineTextAlignment(.center)
+            Text(descriptions[step]).font(Brand.font(17)).foregroundStyle(.secondary).multilineTextAlignment(.center).lineSpacing(5)
             if step == 2 { Button("السماح بالإشعارات") { model.allowNotifications() }.buttonStyle(.borderedProminent) }
             if step == 3 { Button(model.login.enabled ? "التشغيل عند الدخول مفعّل" : "تفعيل التشغيل عند الدخول") { model.setLogin(true) }.disabled(model.login.enabled) }
-            HStack(spacing: 7) { ForEach(0..<5) { index in Capsule().fill(index == step ? Color.teal : Color.secondary.opacity(0.2)).frame(width: index == step ? 22 : 7, height: 6) } }.padding(.top, 12)
+            HStack(spacing: 7) { ForEach(0..<5) { index in Capsule().fill(index == step ? Brand.ocean : Color.secondary.opacity(0.2)).frame(width: index == step ? 22 : 7, height: 6) } }.padding(.top, 12)
             HStack {
                 Button("لاحقًا") { model.updateSettings { $0.onboardingComplete = true } }.buttonStyle(.plain).foregroundStyle(.secondary)
                 Spacer()
@@ -32,6 +33,6 @@ struct OnboardingView: View {
                     }
                 }.buttonStyle(.borderedProminent).keyboardShortcut(.defaultAction)
             }
-        }.padding(44).frame(width: 530, height: 460).environment(\.layoutDirection, .rightToLeft).tint(.teal)
+        }.padding(44).frame(width: 530, height: 460).environment(\.layoutDirection, .rightToLeft).tint(Brand.ocean)
     }
 }

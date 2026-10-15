@@ -1,4 +1,5 @@
 import SwiftUI
+import ReminderDesign
 import ReminderCore
 import ServiceManagement
 
@@ -39,26 +40,26 @@ struct SettingsView: View {
                     Picker("الشاشات", selection: model.setting(\.allScreens)) { Text("كل الشاشات").tag(true); Text("الشاشة الرئيسية فقط").tag(false) }
                     HStack { Text("عتامة الخلفية"); Slider(value: model.setting(\.overlayOpacity), in: 0.75...0.95); Text("\(Int(model.settings.overlayOpacity * 100))٪").monospacedDigit() }
                     Button("تجربة الشاشة") { model.testOverlay() }
-                    Text("يمكنك دائمًا إغلاق التنبيه بزر تم أو Escape. الظهور فوق تطبيقات ملء الشاشة يخضع لسلوك macOS.").font(.caption).foregroundStyle(.secondary)
+                    Text("يمكنك دائمًا إغلاق التنبيه بزر تم أو Escape. الظهور فوق تطبيقات ملء الشاشة يخضع لسلوك macOS.").font(Brand.font(14)).foregroundStyle(.secondary)
                 }
                 Section("الصوت") {
                     Toggle("تفعيل الأصوات", isOn: model.setting(\.soundEnabled))
                     HStack { Text("مستوى صوت التطبيق"); Slider(value: model.setting(\.volume), in: 0...1); Text("\(Int(model.settings.volume * 100))٪").monospacedDigit() }
                     HStack { Button("تجربة الصوت") { model.testSound() }; Button("إيقاف الصوت") { model.sounds.stop() } }
-                    Text("مستوى الصوت هنا يخص الصوت داخل التطبيق. صوت إشعار النظام يتبع إعدادات macOS.").font(.caption).foregroundStyle(.secondary)
+                    Text("مستوى الصوت هنا يخص الصوت داخل التطبيق. صوت إشعار النظام يتبع إعدادات macOS.").font(Brand.font(14)).foregroundStyle(.secondary)
                 }
                 Section("التأجيل والمواعيد الفائتة") {
                     Picker("التأجيل الافتراضي", selection: model.setting(\.defaultSnooze)) { ForEach([5, 10, 15], id: \.self) { Text("\($0) دقائق").tag($0) } }
                     Stepper("مهلة التذكير بعد الاستيقاظ: \(model.settings.graceMinutes) دقيقة", value: model.setting(\.graceMinutes), in: 1...240)
-                    Text("إذا مرّت هذه المهلة أثناء السكون، يُسجّل الموعد كفائت ولا يفتح شاشة قديمة.").font(.caption).foregroundStyle(.secondary)
+                    Text("إذا مرّت هذه المهلة أثناء السكون، يُسجّل الموعد كفائت ولا يفتح شاشة قديمة.").font(Brand.font(14)).foregroundStyle(.secondary)
                 }
                 Section("البيانات") {
                     HStack { Button("تصدير البيانات…") { model.exportData() }; Button("استيراد البيانات…") { model.importData() } }
                     Button("إعادة ضبط بيانات التطبيق…", role: .destructive) { showReset = true }
-                    Text("بياناتك محفوظة محليًا. لا حسابات، لا مزامنة سحابية، ولا تقويم متصل في هذا الإصدار.").font(.caption).foregroundStyle(.secondary)
+                    Text("بياناتك محفوظة محليًا. لا حسابات، لا مزامنة سحابية، ولا تقويم متصل في هذا الإصدار.").font(Brand.font(14)).foregroundStyle(.secondary)
                 }
                 Section("Master Reminder") {
-                    LabeledContent("الإصدار", value: "0.1.0 (1)")
+                    LabeledContent("الإصدار", value: "0.2.0 (2)")
                     Text("صُنع لتتوقف في الوقت المناسب.").foregroundStyle(.secondary)
                 }
             }.formStyle(.grouped)

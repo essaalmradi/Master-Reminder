@@ -11,7 +11,11 @@ import ReminderCore
     func play(_ reminder: Reminder, settings: AppSettings) throws {
         stop()
         guard settings.soundEnabled, reminder.sound != .none else { return }
-        if reminder.sound == .custom {
+        if reminder.sound == .dhikr {
+            guard let url = AppResources.url("dhikr-sample", "mp3") else { throw DataError.invalidData }
+            player = try AVAudioPlayer(contentsOf: url)
+            player?.volume = Float(settings.volume); player?.prepareToPlay(); player?.play()
+        } else if reminder.sound == .custom {
             guard let file = reminder.customSoundFile else {
                 throw NSError(domain: "sound", code: 1, userInfo: [NSLocalizedDescriptionKey: "اختر ملف الصوت المخصص أولًا."])
             }

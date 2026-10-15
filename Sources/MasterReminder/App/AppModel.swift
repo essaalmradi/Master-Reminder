@@ -1,17 +1,19 @@
 import AppKit
+import AVFoundation
 import SwiftUI
 import UniformTypeIdentifiers
 import UserNotifications
 import ReminderCore
+import ReminderDesign
 
 enum Page: String, CaseIterable, Identifiable {
-    case dashboard, reminders, prayer, settings
+    case dashboard, reminders, library, tasbih, widgets, prayer, settings
     var id: String { rawValue }
     var title: String {
-        switch self { case .dashboard: return "اليوم"; case .reminders: return "التذكيرات"; case .prayer: return "الصلاة"; case .settings: return "الإعدادات" }
+        switch self { case .dashboard: return "اليوم"; case .reminders: return "التذكيرات"; case .prayer: return "الصلاة"; case .library: return "المكتبة"; case .tasbih: return "التسبيح"; case .widgets: return "الويدجت"; case .settings: return "الإعدادات" }
     }
     var symbol: String {
-        switch self { case .dashboard: return "square.grid.2x2"; case .reminders: return "bell"; case .prayer: return "moon.stars"; case .settings: return "gearshape" }
+        switch self { case .dashboard: return "square.grid.2x2"; case .reminders: return "bell"; case .prayer: return "moon.stars"; case .library: return "books.vertical"; case .tasbih: return "circle.dotted"; case .widgets: return "rectangle.3.group"; case .settings: return "gearshape" }
     }
 }
 
@@ -21,6 +23,8 @@ enum Page: String, CaseIterable, Identifiable {
     @Published private(set) var upcoming: [Occurrence] = []
     @Published var page: Page = .dashboard
     @Published var editing: Reminder?
+    @Published var isCreating = false
+    let widgets = DesktopWidgetManager()
     @Published var error: String?
     @Published var notice: String?
     let notifications = NotificationManager()
@@ -62,6 +66,8 @@ enum Page: String, CaseIterable, Identifiable {
 
     func start() {
         guard !started else { return }; started = true
+        Brand.registerFonts()
+        widgets.restore(model: self)
         notifications.isPaused = { [weak self] in self?.settings.isPaused(at: Date()) ?? false }
         notifications.shouldPlayForegroundSound = { [weak self] in self?.settings.soundEnabled ?? true }
         notifications.onAction = { [weak self] id, action in self?.notificationAction(id: id, action: action) }
@@ -86,16 +92,13 @@ enum Page: String, CaseIterable, Identifiable {
         data = old; return false
     }
     func report(_ message: String, _ failure: Error) { error = message + ": " + failure.localizedDescription }
-    func newReminder() {
-        var reminder = Reminder(title: "", date: Date().addingTimeInterval(3600))
-        reminder.preAlertMinutes = settings.defaultPreAlert
-        editing = reminder; openWindow()
-    }
+    func newReminder() { isCreating = true; openWindow() }
+    func reminderFromLibrary(_ entry: LibraryEntry) { editing = entry.reminder; openWindow() }
     func saveReminder(_ reminder: Reminder) {
         do {
             let valid = try reminder.validated()
             guard transaction({ $0.upsert(valid) }) else { return }
-            invalidate(reminder.id); editing = nil; reconcile()
+            invalidate(reminder.id); editing = nil; isCreating = false; reconcile()
         } catch { report("راجع بيانات التذكير", error) }
     }
     func deleteReminder(_ reminder: Reminder) {
@@ -253,21 +256,22 @@ enum Page: String, CaseIterable, Identifiable {
         sounds.stop(); overlay.close(); activeQueue.removeAll(); _ = persist()
     }
     func testReminder() {
-        var value = Reminder(title: "هذا وقتك", date: Date().addingTimeInterval(10))
-        value.detail = "تجربة التذكير — خذ استراحة قصيرة من العمل"
-        value.type = .breakTime; value.preAlertMinutes = 0; value.isTemporary = true
+        var value = Reminder(title: "لحظة تطمئن فيها", date: Date().addingTimeInterval(10))
+        value.detail = "سبحان الله وبحمده"
+        value.sound = .dhikr
+        value.type = .dhikr; value.preAlertMinutes = 0; value.isTemporary = true
         temporary.append(value); notice = settings.isPaused(at: Date()) ? "التذكيرات متوقفة مؤقتًا. استأنفها لتجربة التنبيه." : "سيظهر التذكير التجريبي بعد 10 ثوانٍ."
         reconcile()
     }
     func testOverlay() {
         guard !settings.isPaused(at: Date()) else { notice = "استأنف التذكيرات أولًا."; return }
-        var value = Reminder(title: "خذ لحظة لنفسك", date: Date()); value.detail = "تنفّس، تمدّد، وارجع بتركيز أكبر."
+        var value = Reminder(title: "لحظة ذكر", date: Date()); value.detail = SpiritualLibrary.shared.dailyVerse()?.text ?? "سبحان الله وبحمده"
         value.type = .breakTime; value.isTemporary = true
         let occurrence = Occurrence(reminder: value, date: value.date)
         activeQueue.append(occurrence); presentNext()
     }
     func testSound() {
-        do { try sounds.play(Reminder(title: "Test", date: Date()), settings: settings) } catch { report("تعذّر تشغيل الصوت", error) }
+        do { var sample = Reminder(title: "ذكر", date: Date()); sample.sound = .dhikr; try sounds.play(sample, settings: settings) } catch { report("تعذّر تشغيل الصوت", error) }
     }
     func testNotification() { Task { do { try await notifications.test() } catch { report("الإشعارات", error) } } }
     func allowNotifications() { Task { do { try await notifications.requestPermission(); reconcile() } catch { report("تعذّر طلب الإذن", error) } } }
@@ -276,10 +280,10 @@ enum Page: String, CaseIterable, Identifiable {
     func openWindow(page: Page? = nil) {
         if let page { self.page = page }
         if mainWindow == nil {
-            let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1040, height: 740),
+            let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1160, height: 790),
                 styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
             window.title = "Master Reminder"; window.titlebarAppearsTransparent = true
-            window.minSize = NSSize(width: 820, height: 620); window.isReleasedWhenClosed = false
+            window.minSize = NSSize(width: 960, height: 700); window.isReleasedWhenClosed = false
             window.setFrameAutosaveName("main-window")
             window.contentView = NSHostingView(rootView: RootView().environmentObject(self))
             window.center(); mainWindow = window
@@ -337,6 +341,16 @@ enum Page: String, CaseIterable, Identifiable {
         try? await Task.sleep(nanoseconds: 2_000_000_000)
         var results: [String: Bool] = [:]
         results["mainWindow"] = mainWindow?.isVisible == true
+        results["libraryLoaded"] = SpiritualLibrary.shared.entries.count == 6545
+        results["arabicFontRegistered"] = NSFont(name: Brand.arabicName, size: 18) != nil
+        results["brandIconPresent"] = AppResources.url("AppIcon", "png") != nil
+        results["audioSampleDecodes"] = (try? AVAudioPlayer(contentsOf: AppResources.url("dhikr-sample", "mp3")!)) != nil
+        newReminder(); results["creationWizard"] = isCreating; isCreating = false
+        widgets.set(.dhikr, visible: true); results["desktopWidgetCreated"] = widgets.count == 1
+        widgets.setFloating(true); results["widgetFloating"] = widgets.floatOnTop
+        widgets.set(.dhikr, visible: false); results["widgetRemoved"] = widgets.count == 0
+        widgets.setFloating(false)
+
         testOverlay()
         results["overlayCreated"] = overlay.windowCount > 0
         if let occurrence = overlay.current { finish(occurrence) }
@@ -369,6 +383,14 @@ enum Page: String, CaseIterable, Identifiable {
         if let view = mainWindow?.contentView, let bitmap = view.bitmapImageRepForCachingDisplay(in: view.bounds) {
             view.cacheDisplay(in: view.bounds, to: bitmap)
             try? bitmap.representation(using: .png, properties: [:])?.write(to: url.deletingLastPathComponent().appendingPathComponent("dashboard.png"))
+        }
+        for (target, name) in [(Page.library, "library"), (.widgets, "widgets"), (.tasbih, "tasbih")] {
+            page = target
+            try? await Task.sleep(nanoseconds: 500_000_000)
+            if let view = mainWindow?.contentView, let bitmap = view.bitmapImageRepForCachingDisplay(in: view.bounds) {
+                view.cacheDisplay(in: view.bounds, to: bitmap)
+                try? bitmap.representation(using: .png, properties: [:])?.write(to: url.deletingLastPathComponent().appendingPathComponent(name + ".png"))
+            }
         }
         try? JSONSerialization.data(withJSONObject: results, options: [.prettyPrinted, .sortedKeys]).write(to: url)
         Log.app.info("Runtime smoke completed")

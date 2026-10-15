@@ -4,6 +4,9 @@ APP="dist/Master Reminder.app"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 BIN_DIR="$(swift build -c release --arch arm64 --show-bin-path)"
 install -m 755 "$BIN_DIR/MasterReminder" "$APP/Contents/MacOS/MasterReminder"
+for resource in "$BIN_DIR"/*.bundle; do
+  [ -d "$resource" ] && cp -R "$resource" "$APP/Contents/Resources/"
+done
 cp scripts/Info.plist "$APP/Contents/Info.plist"
 cp Sources/MasterReminder/Resources/PrivacyInfo.xcprivacy "$APP/Contents/Resources/PrivacyInfo.xcprivacy"
 swift scripts/make-icon.swift dist/AppIcon.iconset

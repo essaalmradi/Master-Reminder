@@ -1,4 +1,5 @@
 import SwiftUI
+import ReminderDesign
 import AppKit
 
 @MainActor final class AppDelegate: NSObject, NSApplicationDelegate {
@@ -21,6 +22,7 @@ import AppKit
             } else { Text("لا توجد مواعيد قادمة") }
             Divider()
             Button("إضافة تذكير") { model.newReminder() }.keyboardShortcut("n")
+            Button("الويدجت على المكتب") { model.openWindow(page: .widgets) }
             Button("فتح التطبيق") { model.openWindow() }
             Button("تجربة التذكير بعد 10 ثوانٍ") { model.testReminder() }
             Divider()

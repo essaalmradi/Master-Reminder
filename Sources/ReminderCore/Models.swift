@@ -1,7 +1,7 @@
 import Foundation
 
 public enum ReminderType: String, Codable, CaseIterable, Identifiable {
-    case prayer, meeting, dhikr, breakTime, task, custom
+    case prayer, meeting, dhikr, breakTime, task, custom, dua, quran, hadith, tasbih
     public var id: String { rawValue }
     public var title: String {
         switch self {
@@ -11,6 +11,10 @@ public enum ReminderType: String, Codable, CaseIterable, Identifiable {
         case .breakTime: return "استراحة"
         case .task: return "مهمة"
         case .custom: return "مخصص"
+        case .dua: return "أدعية"
+        case .quran: return "قرآن"
+        case .hadith: return "أحاديث"
+        case .tasbih: return "تسبيح"
         }
     }
     public var symbol: String {
@@ -21,6 +25,10 @@ public enum ReminderType: String, Codable, CaseIterable, Identifiable {
         case .breakTime: return "cup.and.saucer"
         case .task: return "checkmark.circle"
         case .custom: return "bell"
+        case .dua: return "hands.sparkles"
+        case .quran: return "book.closed"
+        case .hadith: return "text.book.closed"
+        case .tasbih: return "circle.dotted"
         }
     }
 }
@@ -39,7 +47,7 @@ public enum RepeatRule: String, Codable, CaseIterable, Identifiable {
 }
 
 public enum SoundChoice: String, Codable, CaseIterable, Identifiable {
-    case none, `default`, bell, soft, custom
+    case none, `default`, bell, soft, custom, dhikr
     public var id: String { rawValue }
     public var title: String {
         switch self {
@@ -48,6 +56,7 @@ public enum SoundChoice: String, Codable, CaseIterable, Identifiable {
         case .bell: return "جرس"
         case .soft: return "هادئ"
         case .custom: return "ملف مخصص"
+        case .dhikr: return "ذكر مسجّل · سبحان الله وبحمده"
         }
     }
 }
