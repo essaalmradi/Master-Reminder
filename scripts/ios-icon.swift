@@ -1,15 +1,24 @@
-import AppKit
 import Foundation
+import CoreGraphics
+import ImageIO
+import UniformTypeIdentifiers
+
+// Headless asset resizing via CoreGraphics (no AppKit drawing context required).
 let folder = URL(fileURLWithPath: "iOS/App/Assets.xcassets/AppIcon.appiconset")
 try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-let image = NSImage(contentsOfFile: "Sources/ReminderCore/Resources/AppIcon.png")!
-let bitmap = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 1024, pixelsHigh: 1024, bitsPerSample: 8, samplesPerPixel: 3, hasAlpha: false, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)!
-NSGraphicsContext.saveGraphicsState(); NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: bitmap)
-NSColor(calibratedRed: 1.0/255, green: 14.0/255, blue: 22.0/255, alpha: 1).setFill()
-NSRect(x: 0, y: 0, width: 1024, height: 1024).fill()
-NSGraphicsContext.current?.imageInterpolation = .high
-image.draw(in: NSRect(x: 0, y: 0, width: 1024, height: 1024)); NSGraphicsContext.restoreGraphicsState()
-try bitmap.representation(using: .png, properties: [:])!.write(to: folder.appendingPathComponent("AppIcon.png"))
+let source = URL(fileURLWithPath: "Sources/ReminderCore/Resources/AppIcon.png")
+guard let input = CGImageSourceCreateWithURL(source as CFURL, nil),
+      let original = CGImageSourceCreateImageAtIndex(input, 0, nil),
+      let context = CGContext(data: nil, width: 1024, height: 1024, bitsPerComponent: 8, bytesPerRow: 4096,
+                              space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue)
+else { fatalError("Cannot load supplied icon") }
+context.setFillColor(CGColor(red: 1.0/255, green: 14.0/255, blue: 22.0/255, alpha: 1))
+context.fill(CGRect(x: 0, y: 0, width: 1024, height: 1024))
+context.interpolationQuality = .high
+context.draw(original, in: CGRect(x: 0, y: 0, width: 1024, height: 1024))
+guard let image = context.makeImage(), let output = CGImageDestinationCreateWithURL(folder.appendingPathComponent("AppIcon.png") as CFURL, UTType.png.identifier as CFString, 1, nil) else { fatalError("Cannot write icon") }
+CGImageDestinationAddImage(output, image, nil)
+guard CGImageDestinationFinalize(output) else { fatalError("Cannot finalize icon") }
 let json = """
 {"images":[{"filename":"AppIcon.png","idiom":"universal","platform":"ios","size":"1024x1024"}],"info":{"author":"xcode","version":1}}
 """

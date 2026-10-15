@@ -36,7 +36,17 @@ public struct BrandIcon: View {
     private let size: CGFloat
     public init(size: CGFloat = 48) { self.size = size }
     public var body: some View {
-        Image("AppIcon", bundle: AppResources.bundle).resizable().interpolation(.high).scaledToFit().frame(width: size, height: size)
+        Group {
+            #if os(macOS)
+            if let url = AppResources.url("AppIcon", "png"), let icon = NSImage(contentsOf: url) {
+                Image(nsImage: icon).resizable().interpolation(.high).scaledToFit()
+            }
+            #else
+            if let url = AppResources.url("AppIcon", "png"), let icon = UIImage(contentsOfFile: url.path) {
+                Image(uiImage: icon).resizable().interpolation(.high).scaledToFit()
+            }
+            #endif
+        }.frame(width: size, height: size)
     }
 }
 

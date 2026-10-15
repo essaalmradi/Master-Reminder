@@ -56,7 +56,7 @@ struct ReminderWizard: View {
                 HStack { Button("رجوع") { step = category == .custom || category == .prayer ? 0 : 1 }.font(Brand.font(14)); Spacer(); Text("الخطوة الأخيرة · الوقت والتنبيه").font(Brand.font(14)).foregroundStyle(.secondary) }
                 ReminderEditor(reminder: value).environmentObject(model).id(value.id)
             }
-        }.padding(step == 2 ? 14 : 28).frame(width: 730, height: 750)
+        }.padding(step == 2 ? 14 : 28).frame(width: 730, height: 780)
             .background(Brand.page(scheme)).environment(\.layoutDirection, .rightToLeft).tint(Brand.ocean)
     }
     private func choose(_ item: SpiritualCategory) {

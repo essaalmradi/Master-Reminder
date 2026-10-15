@@ -343,7 +343,7 @@ enum Page: String, CaseIterable, Identifiable {
         results["mainWindow"] = mainWindow?.isVisible == true
         results["libraryLoaded"] = SpiritualLibrary.shared.entries.count == 6545
         results["arabicFontRegistered"] = NSFont(name: Brand.arabicName, size: 18) != nil
-        results["brandIconPresent"] = AppResources.url("AppIcon", "png") != nil
+        results["brandIconPresent"] = AppResources.url("AppIcon", "png").flatMap { NSImage(contentsOf: $0) } != nil
         results["audioSampleDecodes"] = (try? AVAudioPlayer(contentsOf: AppResources.url("dhikr-sample", "mp3")!)) != nil
         newReminder(); results["creationWizard"] = isCreating; isCreating = false
         widgets.set(.dhikr, visible: true); results["desktopWidgetCreated"] = widgets.count == 1
@@ -377,6 +377,7 @@ enum Page: String, CaseIterable, Identifiable {
         results["tenSecondTestTrigger"] = overlay.current?.reminder.isTemporary == true
         results["temporaryNotPersisted"] = (try? storage.load().reminders.isEmpty) == true
         if let occurrence = overlay.current { finish(occurrence) }
+        clearRuntime(); notice = nil
         mainWindow?.close(); results["closeKeepsProcessAlive"] = NSApp.isRunning
         openWindow(); results["reopen"] = mainWindow?.isVisible == true
         let url = storage.url.deletingLastPathComponent().appendingPathComponent("smoke-results.json")
@@ -392,6 +393,14 @@ enum Page: String, CaseIterable, Identifiable {
                 try? bitmap.representation(using: .png, properties: [:])?.write(to: url.deletingLastPathComponent().appendingPathComponent(name + ".png"))
             }
         }
+        page = .dashboard; newReminder()
+        try? await Task.sleep(nanoseconds: 600_000_000)
+        if let view = mainWindow?.attachedSheet?.contentView, let bitmap = view.bitmapImageRepForCachingDisplay(in: view.bounds) {
+            view.cacheDisplay(in: view.bounds, to: bitmap)
+            try? bitmap.representation(using: .png, properties: [:])?.write(to: url.deletingLastPathComponent().appendingPathComponent("creation.png"))
+            results["wizardSheetRendered"] = true
+        } else { results["wizardSheetRendered"] = false }
+        isCreating = false
         try? JSONSerialization.data(withJSONObject: results, options: [.prettyPrinted, .sortedKeys]).write(to: url)
         Log.app.info("Runtime smoke completed")
         NSApp.terminate(nil)

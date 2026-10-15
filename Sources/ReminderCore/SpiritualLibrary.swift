@@ -110,7 +110,7 @@ public final class SpiritualLibrary {
         return entry(ids[day % ids.count])
     }
     public func dailyDhikr(at date: Date = Date()) -> LibraryEntry? {
-        let choices = entries.filter { $0.category == "dhikr" && $0.text.count < 160 && $0.text.count > 25 }
+        let choices = entries.filter { $0.category == "dhikr" && $0.text.count < 95 && $0.text.count > 25 }
         guard !choices.isEmpty else { return nil }
         let day = Calendar.current.ordinality(of: .day, in: .era, for: date) ?? 0
         return choices[day % choices.count]

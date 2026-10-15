@@ -66,7 +66,7 @@ struct DashboardView: View {
                 Spacer()
                 Button("جرّب الآن") { model.testReminder() }.buttonStyle(.plain).font(Brand.font(15)).foregroundStyle(Brand.ice)
             }
-        }.padding(26).frame(maxWidth: .infinity, minHeight: 194, maxHeight: 194, alignment: .leading).foregroundStyle(.white)
+        }.padding(26).frame(maxWidth: .infinity, minHeight: 246, maxHeight: 246, alignment: .leading).foregroundStyle(.white)
             .background(Brand.gradient, in: RoundedRectangle(cornerRadius: 26))
     }
     private func metric(_ title: String, value: String, icon: String) -> some View {
