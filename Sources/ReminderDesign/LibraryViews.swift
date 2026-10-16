@@ -10,7 +10,13 @@ import ReminderCore
     private var status: NSKeyValueObservation?
     private var endToken: NSObjectProtocol?
     public override init() { super.init() }
-    public func play(_ entry: LibraryEntry) {
+    public func play(_ entry: LibraryEntry, reciterID: String? = nil) {
+        var selected = entry.reminder
+        if entry.category == "quran" {
+            selected.sound = .quran
+            var audio = selected.audio ?? ReminderAudio(); audio.libraryEntryID = entry.id; audio.reciterID = reciterID ?? "alafasy"; selected.audio = audio
+        }
+        let recording = try? AudioCatalog.recording(for: selected)
         stop(); message = nil
         #if os(iOS)
         do { try AVAudioSession.sharedInstance().setCategory(.playback, mode: .spokenAudio); try AVAudioSession.sharedInstance().setActive(true) }
@@ -19,14 +25,14 @@ import ReminderCore
         if let name = entry.bundledAudio, let url = AppResources.url(name, "mp3") {
             do { let player = try AVAudioPlayer(contentsOf: url); player.delegate = self; local = player; isPlaying = player.play() }
             catch { message = "تعذّر تشغيل التسجيل." }
-        } else if let raw = entry.audioURL, let url = URL(string: raw), url.scheme == "https" {
+        } else if let url = recording?.url ?? entry.audioURL.flatMap(URL.init(string:)), url.scheme == "https" {
             message = "جارٍ تحميل التسجيل…"
             let item = AVPlayerItem(url: url); let player = AVPlayer(playerItem: item); remote = player
             status = item.observe(\.status, options: [.new, .initial]) { [weak self] item, _ in
                 Task { @MainActor in
                     guard self?.remote?.currentItem === item else { return }
                     if item.status == .failed { self?.message = "تعذّر تحميل التسجيل. تحقق من الإنترنت وحاول مجددًا."; self?.isPlaying = false }
-                    if item.status == .readyToPlay { self?.message = "تسجيل حصن المسلم"; self?.isPlaying = true }
+                    if item.status == .readyToPlay { self?.message = recording?.title ?? "تسجيل حصن المسلم"; self?.isPlaying = true }
                 }
             }
             endToken = NotificationCenter.default.addObserver(forName: .AVPlayerItemDidPlayToEndTime, object: item, queue: .main) { [weak self] _ in
@@ -132,9 +138,10 @@ public struct LibraryBrowser: View {
                 var set = favoriteSet
                 if set.contains(entry.id) { set.remove(entry.id) } else { set.insert(entry.id) }
                 favorites = set.sorted().joined(separator: "|")
-            }, onAdd: {
+            }, onAdd: { reciterID in
+                var value = entry; value.selectedReciterID = reciterID
                 selected = nil
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { onAdd(entry) }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { onAdd(value) }
             })
         }
     }
@@ -150,10 +157,11 @@ public struct LibraryDetail: View {
     @Environment(\.colorScheme) private var scheme
     @StateObject private var audio = AudioPreview()
     @State private var favorite: Bool
+    @State private var reciterID = "alafasy"
     let entry: LibraryEntry
     let toggleFavorite: () -> Void
-    let onAdd: () -> Void
-    public init(entry: LibraryEntry, isFavorite: Bool = false, toggleFavorite: @escaping () -> Void = {}, onAdd: @escaping () -> Void) {
+    let onAdd: (String?) -> Void
+    public init(entry: LibraryEntry, isFavorite: Bool = false, toggleFavorite: @escaping () -> Void = {}, onAdd: @escaping (String?) -> Void) {
         self.entry = entry; self.toggleFavorite = toggleFavorite; self.onAdd = onAdd; _favorite = State(initialValue: isFavorite)
     }
     public var body: some View {
@@ -167,8 +175,11 @@ public struct LibraryDetail: View {
                     if entry.repetitions > 1 { Text("التكرار الوارد في المصدر: \(entry.repetitions)").font(Brand.font(15)) }
                     if let url = URL(string: entry.sourceURL) { Link("اقرأ المصدر", destination: url).font(Brand.font(15)) }
                     if entry.category == "quran" { Text("النص من مشروع تنزيل · محفوظ كما ورد في المصدر").font(Brand.font(13)).foregroundStyle(.secondary) }
-                    if entry.audioURL != nil {
-                        Button { if audio.isPlaying { audio.stop() } else { audio.play(entry) } } label: {
+                    if entry.category == "quran" {
+                        Picker("القارئ", selection: $reciterID) { ForEach(AudioCatalog.reciters) { Text($0.name).tag($0.id) } }
+                    }
+                    if entry.audioURL != nil || entry.category == "quran" {
+                        Button { if audio.isPlaying { audio.stop() } else { audio.play(entry, reciterID: reciterID) } } label: {
                             Label(audio.isPlaying ? "إيقاف التسجيل" : (entry.bundledAudio == nil ? "استمع · يحتاج الإنترنت" : "استمع · متاح بدون إنترنت"), systemImage: audio.isPlaying ? "stop.circle" : "play.circle")
                         }.buttonStyle(BrandButton())
                         if let message = audio.message { Text(message).font(Brand.font(13)).foregroundStyle(.secondary) }
@@ -178,7 +189,7 @@ public struct LibraryDetail: View {
             HStack {
                 Button { toggleFavorite(); favorite.toggle() } label: { Label("المفضلة", systemImage: favorite ? "heart.fill" : "heart") }.buttonStyle(.plain)
                 Spacer()
-                Button("ذكّرني بهذا", action: onAdd).buttonStyle(BrandButton()).disabled(entry.reminder.detail.count > 4000)
+                Button("ذكّرني بهذا") { onAdd(entry.category == "quran" ? reciterID : nil) }.buttonStyle(BrandButton()).disabled(entry.reminder.detail.count > 4000)
             }
             if entry.reminder.detail.count > 4000 { Text("هذا النص طويل للتنبيه. يمكنك قراءته هنا وإضافة تذكير مخصص بعنوانه.").font(Brand.font(13)).foregroundStyle(.secondary) }
         }.padding(28).background(Brand.page(scheme)).environment(\.layoutDirection, .rightToLeft)
@@ -186,6 +197,7 @@ public struct LibraryDetail: View {
         #if os(macOS)
         .frame(width: 630, height: 640)
         #endif
+        .onChange(of: reciterID) { _ in audio.stop() }
         .onDisappear { audio.stop() }
     }
 }

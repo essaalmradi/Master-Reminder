@@ -47,6 +47,7 @@ enum Page: String, CaseIterable, Identifiable {
     private var temporary: [Reminder] = []
     private var transientLedger: [String: EventRecord] = [:]
     private var activeQueue: [Occurrence] = []
+    private var audioOnly: Occurrence?
     private var recent: [String: Occurrence] = [:]
     private var schedulerActivity: NSObjectProtocol?
     private var suspendedOverlays: [Occurrence] = []
@@ -73,6 +74,7 @@ enum Page: String, CaseIterable, Identifiable {
     func start(isBackgroundLaunch: Bool = false) {
         guard !started else { return }; started = true
         Brand.registerFonts()
+        sounds.onPlaybackEnd = { [weak self] in self?.audioOnly = nil; self?.presentNext() }
         widgets.restore(model: self)
         notifications.isPaused = { [weak self] in self?.settings.isPaused(at: Date()) ?? false }
         notifications.shouldPlayForegroundSound = { [weak self] in self?.settings.soundEnabled ?? true }
@@ -119,7 +121,8 @@ enum Page: String, CaseIterable, Identifiable {
         let old = settings
         guard transaction({ update(&$0.settings); $0.settings.normalize() }) else { return }
         if old.soundEnabled != settings.soundEnabled || old.volume != settings.volume { sounds.stop() }
-        if settings.isPaused(at: Date()) || !settings.overlayEnabled { overlay.close(); sounds.stop(); activeQueue.removeAll(); suspendedOverlays.removeAll() }
+        if settings.isPaused(at: Date()) { overlay.close(); sounds.stop(); audioOnly = nil; activeQueue.removeAll(); suspendedOverlays.removeAll() }
+        else if old.overlayEnabled && !settings.overlayEnabled { audioOnly = sounds.isPlaying ? overlay.current : nil; overlay.close() }
         // Changes to global sound require replacement of pending contents even with the same IDs.
         if old.soundEnabled != settings.soundEnabled { notifications.clearAll() }
         reconcile()
@@ -141,6 +144,7 @@ enum Page: String, CaseIterable, Identifiable {
         activeQueue.removeAll { $0.reminder.id == id }
         suspendedOverlays.removeAll { $0.reminder.id == id }
         recent = recent.filter { $0.value.reminder.id != id }
+        if audioOnly?.reminder.id == id { audioOnly = nil; sounds.stop() }
         if overlay.current?.reminder.id == id { overlay.close(); sounds.stop(); presentNext() }
     }
     func pause(minutes: Int?) {
@@ -216,7 +220,8 @@ enum Page: String, CaseIterable, Identifiable {
         if let deadline { RunLoop.main.add(deadline, forMode: .common) }
     }
     private func presentNext() {
-        guard overlay.current == nil, !settings.isPaused(at: Date()) else { return }
+        if audioOnly != nil && sounds.currentID != audioOnly?.reminder.id { audioOnly = nil }
+        guard overlay.current == nil, audioOnly == nil, !settings.isPaused(at: Date()) else { return }
         while !activeQueue.isEmpty {
             let occurrence = activeQueue.removeFirst()
             guard Date().timeIntervalSince(occurrence.date) <= TimeInterval(settings.graceMinutes * 60) else { continue }
@@ -230,6 +235,7 @@ enum Page: String, CaseIterable, Identifiable {
                 break
             }
             do { try sounds.play(occurrence.reminder, settings: settings) } catch { report("تعذّر تشغيل الصوت", error) }
+            if sounds.currentID == occurrence.reminder.id { audioOnly = occurrence; break }
         }
     }
     func finish(_ occurrence: Occurrence) {
@@ -237,6 +243,7 @@ enum Page: String, CaseIterable, Identifiable {
         else { guard transaction({ $0.ledger[occurrence.id] = EventRecord(.dismissed, at: Date()) }) else { overlay.close(); sounds.stop(); return } }
         notifications.clearOccurrence(occurrence.id)
         activeQueue.removeAll { $0.id == occurrence.id }
+        if audioOnly?.id == occurrence.id { audioOnly = nil; sounds.stop() }
         if overlay.current?.id == occurrence.id { overlay.close(); sounds.stop() }
         presentNext(); reconcile()
     }
@@ -252,6 +259,7 @@ enum Page: String, CaseIterable, Identifiable {
         }
         notifications.clearOccurrence(occurrence.id)
         activeQueue.removeAll { $0.id == occurrence.id }
+        if audioOnly?.id == occurrence.id { audioOnly = nil; sounds.stop() }
         if overlay.current?.id == occurrence.id { overlay.close(); sounds.stop() }
         presentNext(); reconcile()
     }
@@ -266,10 +274,10 @@ enum Page: String, CaseIterable, Identifiable {
         else if action.hasPrefix("snooze-"), let minutes = Int(action.dropFirst(7)) { snooze(occurrence, minutes: minutes) }
     }
     private func prepareForSleep() {
-        for item in (overlay.current.map { [$0] } ?? []) + activeQueue where !suspendedOverlays.contains(where: { $0.id == item.id }) {
+        for item in (overlay.current.map { [$0] } ?? []) + (audioOnly.map { [$0] } ?? []) + activeQueue where !suspendedOverlays.contains(where: { $0.id == item.id }) {
             suspendedOverlays.append(item)
         }
-        sounds.stop(); overlay.close(); activeQueue.removeAll(); _ = persist()
+        sounds.stop(); audioOnly = nil; overlay.close(); activeQueue.removeAll(); _ = persist()
     }
     private func restoreAfterWake() {
         let remaining = suspendedOverlays; suspendedOverlays.removeAll()
@@ -351,8 +359,20 @@ enum Page: String, CaseIterable, Identifiable {
                    FileManager.default.fileExists(atPath: sounds.directory.appendingPathComponent(file).path) { continue }
                 imported.reminders[index].sound = .default; imported.reminders[index].customSoundFile = nil
             }
-            try storage.save(imported); data = imported; canPersist = true
-            clearRuntime(); notifications.clearAll(); reconcile(); notice = "تم الاستيراد. راجع مواقيت الصلاة والتذكيرات."
+            for index in imported.prayers.indices where imported.prayers[index].sound == .custom {
+                if let file = imported.prayers[index].customSoundFile, FileManager.default.fileExists(atPath: sounds.directory.appendingPathComponent(file).path) { continue }
+                imported.prayers[index].sound = .default; imported.prayers[index].customSoundFile = nil
+            }
+            let candidate = imported
+            notice = "جارٍ تجهيز أصوات البيانات المستوردة…"
+            Task { @MainActor in
+                do {
+                    let audible = candidate.reminders + prayerProvider.reminders(entries: candidate.prayers, settings: candidate.settings) + candidate.snoozes.map(\.reminder)
+                    for value in audible where value.enabled { try await sounds.prepare(value) }
+                    try storage.save(candidate); data = candidate; canPersist = true
+                    clearRuntime(); notifications.clearAll(); reconcile(); notice = "تم الاستيراد وتجهيز الأصوات. راجع مواقيت الصلاة والتذكيرات."
+                } catch { notice = nil; report("تعذّر الاستيراد؛ البيانات الحالية محفوظة", error) }
+            }
         } catch { report("تعذّر الاستيراد؛ البيانات الحالية محفوظة", error) }
     }
     private func backupCurrent() throws {
@@ -368,7 +388,7 @@ enum Page: String, CaseIterable, Identifiable {
         } catch { report("تعذّرت إعادة الضبط", error) }
     }
     private func clearRuntime() {
-        overlay.close(); sounds.stop(); temporary.removeAll(); transientLedger.removeAll(); activeQueue.removeAll(); suspendedOverlays.removeAll(); recent.removeAll()
+        overlay.close(); sounds.stop(); audioOnly = nil; temporary.removeAll(); transientLedger.removeAll(); activeQueue.removeAll(); suspendedOverlays.removeAll(); recent.removeAll()
     }
     func quit() {
         prepareForSleep(); isCreating = false; editing = nil
@@ -419,6 +439,9 @@ enum Page: String, CaseIterable, Identifiable {
         try? await Task.sleep(nanoseconds: 200_000_000)
         results["audioPlaybackStarts"] = sounds.isPlaying
         sounds.stop()
+        let audioChecks = await sounds.verifySelectionsForSmoke()
+        results.merge(audioChecks) { _, latest in latest }
+        checkpoint("selected recordings downloaded and played")
         newReminder(); results["creationWizard"] = isCreating; isCreating = false
         widgets.set(.dhikr, visible: true); results["desktopWidgetCreated"] = widgets.count == 1
         results["widgetPositionRestored"] = await widgets.checkPositionRestorationForSmoke()
@@ -442,6 +465,7 @@ enum Page: String, CaseIterable, Identifiable {
         reminder = data.reminders.first { $0.id == reminder.id } ?? reminder
         notifications.delayForSmoke = 12_000_000_000
         reminder.title = "لحظة تطمئن فيها"; reminder.detail = "سبحان الله وبحمده"; reminder.type = .dhikr
+        reminder.sound = .quran; reminder.audio = ReminderAudio(); reminder.audio?.libraryEntryID = "quran-1-1"; reminder.audio?.reciterID = "husary"
         reminder.date = Date().addingTimeInterval(3); reminder.preAlertMinutes = 0; saveReminder(reminder)
         mainWindow?.close(); NSApp.hide(nil)
         NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.finder").first?.activate(options: [.activateIgnoringOtherApps])
@@ -450,6 +474,7 @@ enum Page: String, CaseIterable, Identifiable {
         results["mainWindowClosedBeforeDue"] = mainWindow?.isVisible == false
         try? await Task.sleep(nanoseconds: 3_000_000_000)
         results["runtimeDueTrigger"] = overlay.current?.reminder.id == reminder.id
+        results["selectedQuranPlaysAtDueTimeInBackground"] = sounds.currentID == reminder.id && sounds.activeChoice == .quran && sounds.isPlaying
         results["backgroundOverlayVisible"] = overlay.visibleWindowCount > 0
         results["windowServerConfirmsOnScreen"] = overlay.onScreenWindowCount > 0
         results["alarmIndependentOfSlowOSService"] = notifications.syncInProgress && overlay.current?.reminder.id == reminder.id
@@ -462,12 +487,29 @@ enum Page: String, CaseIterable, Identifiable {
             snooze(occurrence, minutes: 5)
             results["runtimeSnooze"] = data.snoozes.contains { $0.parentID == occurrence.id }
             results["snoozeClosesOverlay"] = overlay.current == nil
+            results["snoozeStopsSelectedAudio"] = !sounds.isPlaying
+            results["snoozeKeepsReciter"] = data.snoozes.first?.reminder.audio?.reciterID == "husary"
             results["snoozePersisted"] = (try? storage.load().snoozes.contains { $0.parentID == occurrence.id }) == true
         } else { results["runtimeSnooze"] = false }
         deleteReminder(reminder); results["delete"] = !data.reminders.contains { $0.id == reminder.id }
         results["deleteSnoozeCleanup"] = data.snoozes.isEmpty
         notifications.delayForSmoke = 0
         checkpoint("CRUD and snooze passed")
+        updateSettings { $0.overlayEnabled = false }
+        var first = SpiritualLibrary.shared.audioSample!.reminder
+        first.id = UUID(); first.repeatRule = .once; first.date = Date().addingTimeInterval(1); first.preAlertMinutes = 0
+        var second = first; second.id = UUID(); second.date = first.date.addingTimeInterval(0.1)
+        saveReminder(first); saveReminder(second)
+        try? await Task.sleep(nanoseconds: 1_500_000_000)
+        results["audioOnlyFirstStarts"] = sounds.currentID == first.id && overlay.current == nil
+        for _ in 0..<16 {
+            if sounds.currentID == second.id { break }
+            try? await Task.sleep(nanoseconds: 500_000_000)
+        }
+        results["audioOnlySecondWaitsForCompletion"] = sounds.currentID == second.id && sounds.isPlaying
+        deleteReminder(first); deleteReminder(second)
+        updateSettings { $0.overlayEnabled = true }
+
         testReminder()
         try? await Task.sleep(nanoseconds: 11_000_000_000)
         results["tenSecondTestTrigger"] = overlay.current?.reminder.isTemporary == true
@@ -528,6 +570,18 @@ enum Page: String, CaseIterable, Identifiable {
         results["customCategoryOpensEditor"] = creationCategory == .custom && mainWindow?.attachedSheet != nil
         isCreating = false
         try? await Task.sleep(nanoseconds: 600_000_000)
+        for (choice, name) in [(SoundChoice.quran, "audio-quran"), (.adhan, "audio-adhan"), (.library, "audio-dhikr"), (.speech, "audio-speech")] {
+            var value = choice == .library ? SpiritualLibrary.shared.audioSample!.reminder : SpiritualLibrary.shared.entry("quran-1-1")!.reminder
+            value.sound = choice
+            if choice == .adhan { value.type = .prayer; value.audio?.recordingID = "nafees" }
+            if choice == .speech { value.type = .custom; value.title = "استراحة قصيرة"; value.audio?.spokenText = "خذ استراحة قصيرة، واشرب بعض الماء." }
+            let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 680, height: 650), styleMask: [.titled, .closable], backing: .buffered, defer: false)
+            window.isReleasedWhenClosed = false
+            window.contentView = NSHostingView(rootView: ReminderEditor(reminder: value, tab: 1).environmentObject(self).preferredColorScheme(.light))
+            window.center(); window.makeKeyAndOrderFront(nil)
+            try? await Task.sleep(nanoseconds: 700_000_000)
+            capture(name, view: window.contentView); window.close()
+        }
         updateSettings { $0.onboardingComplete = true }
         results["completedProfileSavedForRelaunch"] = (try? storage.load().settings.onboardingComplete) == true
         try? JSONSerialization.data(withJSONObject: results, options: [.prettyPrinted, .sortedKeys]).write(to: url)

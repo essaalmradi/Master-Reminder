@@ -11,7 +11,7 @@ cleanup() {
 trap cleanup EXIT
 
 # Use the actual delivered disk image, then install the signed .app outside the checkout.
-hdiutil attach "$PROJECT/dist/Master-Reminder-0.3.0.dmg" -readonly -nobrowse -mountpoint "$MOUNT"
+hdiutil attach "$PROJECT/dist/Master-Reminder-0.4.0.dmg" -readonly -nobrowse -mountpoint "$MOUNT"
 ditto "$MOUNT/Master Reminder.app" "$CHECK_ROOT/current/Master Reminder.app"
 hdiutil detach "$MOUNT"
 codesign --verify --deep --strict --verbose=2 "$CHECK_ROOT/current/Master Reminder.app"

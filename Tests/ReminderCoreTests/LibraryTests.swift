@@ -37,7 +37,8 @@ final class LibraryTests: XCTestCase {
     }
     func testSourceAndAudioRemainAttachedToReminder() throws {
         let sample = try XCTUnwrap(SpiritualLibrary.shared.audioSample)
-        XCTAssertEqual(sample.reminder.sound, .dhikr)
+        XCTAssertEqual(sample.reminder.sound, .library)
+        XCTAssertEqual(sample.reminder.audio?.libraryEntryID, sample.id)
         XCTAssertTrue(sample.reminder.detail.contains(sample.reference))
         XCTAssertNotNil(AppResources.url("dhikr-sample", "mp3"))
         _ = try sample.reminder.validated()

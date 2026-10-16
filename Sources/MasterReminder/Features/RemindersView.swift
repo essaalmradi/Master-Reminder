@@ -37,7 +37,7 @@ struct RemindersView: View {
                             HStack(spacing: 12) {
                                 Text(reminder.date, style: .date)
                                 Text(reminder.preAlertMinutes == 0 ? "بدون تنبيه مسبق" : "قبل \(reminder.preAlertMinutes) دقائق")
-                                Label(reminder.sound.title, systemImage: "speaker.wave.2")
+                                Label(AudioCatalog.summary(reminder), systemImage: reminder.sound == .none ? "speaker.slash" : "speaker.wave.2").lineLimit(1)
                                 if reminder.overlay { Label(model.settings.overlayEnabled ? "على الشاشة" : "الشاشة متوقفة من الإعدادات", systemImage: "rectangle") }
                                 if reminder.repeatRule == .once && reminder.date < Date() { Text("انتهى الموعد").foregroundStyle(.secondary) }
                             }.font(Brand.font(12)).foregroundStyle(.secondary)
@@ -60,13 +60,17 @@ struct ReminderEditor: View {
     @State var reminder: Reminder
     var embedded = false
     @State private var preSelection = 5
+    @State var tab = 0
+    @State private var saving = false
+    @State private var saveTask: Task<Void, Never>?
     @State private var localError: String?
     private let weekdays = ["الأحد", "الإثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"]
     var body: some View {
         VStack(spacing: 0) {
             if !embedded { HStack { Text("تفاصيل التذكير").font(Brand.font(23)); Spacer(); Button("إلغاء") { dismiss() } }.padding(20) }
+            Picker("التفاصيل", selection: $tab) { Text("الموعد").tag(0); Text("الصوت").tag(1); Text("الشاشة والتنبيه").tag(2) }.pickerStyle(.segmented).padding(.horizontal, 20).padding(.bottom, 12)
             Form {
-                Section("الموعد") {
+                if tab == 0 { Section("الموعد") {
                     TextField("العنوان", text: $reminder.title)
                     TextField("الوصف", text: $reminder.detail, axis: .vertical).lineLimit(2...4)
                     Picker("النوع", selection: $reminder.type) { ForEach(ReminderType.allCases) { Text($0.title).tag($0) } }
@@ -86,18 +90,15 @@ struct ReminderEditor: View {
                         }
                     }
                 }
-                Section("التنبيه") {
+                }
+                if tab == 1 { Section("صوت التذكير") { ReminderAudioView(reminder: $reminder) } }
+                if tab == 2 { Section("التنبيه") {
                     Picker("التنبيه المسبق", selection: $preSelection) {
                         Text("بدون").tag(0)
                         ForEach([5, 10, 15, 30], id: \.self) { Text("\($0) دقائق").tag($0) }
                         Text("مخصص").tag(-1)
                     }.onChange(of: preSelection) { value in if value >= 0 { reminder.preAlertMinutes = value } }
                     if preSelection == -1 { Stepper("قبل \(reminder.preAlertMinutes) دقيقة", value: $reminder.preAlertMinutes, in: 1...1440) }
-                    Picker("الصوت", selection: $reminder.sound) { ForEach(SoundChoice.allCases) { Text($0.title).tag($0) } }
-                    if reminder.sound == .custom {
-                        HStack { Text(reminder.customSoundFile == nil ? "لم يُحدد ملف" : "ملف صوت جاهز").foregroundStyle(.secondary); Spacer(); Button("اختيار صوت…", action: chooseSound) }
-                    }
-                    Button("تجربة الصوت") { do { try model.sounds.play(reminder, settings: model.settings) } catch { localError = error.localizedDescription } }
                     Toggle("إظهار شاشة التنبيه", isOn: $reminder.overlay)
                     if reminder.overlay {
                         Stepper(reminder.overlayDuration == 0 ? "تبقى الشاشة حتى إغلاقها" : "إغلاق تلقائي بعد \(reminder.overlayDuration) ثانية", value: $reminder.overlayDuration, in: 0...3600, step: 15)
@@ -105,28 +106,34 @@ struct ReminderEditor: View {
                     Toggle("السماح بالتأجيل", isOn: $reminder.snoozeAllowed)
                     Toggle("التذكير مفعّل", isOn: $reminder.enabled)
                 }
-                
-            }.formStyle(.grouped)
+                }
+            }.formStyle(.grouped).disabled(saving)
+            HStack { Button { tab = 1 } label: { Label(AudioCatalog.summary(reminder), systemImage: reminder.sound == .none ? "speaker.slash" : "speaker.wave.2").lineLimit(1) }.buttonStyle(.plain).font(Brand.font(12)); Spacer() }.padding(.horizontal, 20).padding(.vertical, 8)
             if let localError { Text(localError).font(Brand.font(13)).foregroundStyle(.red).padding(.horizontal, 20).padding(.vertical, 8) }
             Divider()
             HStack {
                 Button("معاينة على الشاشة") { model.previewReminder(reminder) }.font(Brand.font(12)).buttonStyle(.plain)
                 Spacer()
-                Button("حفظ التذكير") { save() }.buttonStyle(.borderedProminent).keyboardShortcut(.defaultAction)
-                    .disabled(reminder.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                Button(saving ? "جارٍ تجهيز الصوت…" : "حفظ التذكير") { save() }.buttonStyle(.borderedProminent).keyboardShortcut(.defaultAction)
+                    .disabled(saving || reminder.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }.padding(20)
         }.font(Brand.font(14)).frame(width: embedded ? 650 : 680, height: embedded ? 570 : 650).environment(\.layoutDirection, .rightToLeft).tint(Brand.ocean)
         .onAppear { preSelection = [0, 5, 10, 15, 30].contains(reminder.preAlertMinutes) ? reminder.preAlertMinutes : -1 }
-        .onDisappear { model.sounds.stop() }
-    }
-    private func chooseSound() {
-        let panel = NSOpenPanel(); panel.allowedContentTypes = [.audio]; panel.allowsMultipleSelection = false
-        guard panel.runModal() == .OK, let url = panel.url else { return }
-        do { reminder.customSoundFile = try model.sounds.importFile(url) } catch { localError = error.localizedDescription }
+        .onDisappear { saveTask?.cancel(); if model.sounds.currentID == reminder.id { model.sounds.stop() } }
     }
     private func save() {
         guard reminder.repeatRule != .once || reminder.date > Date() else { localError = "اختر موعدًا في المستقبل للتذكير مرة واحدة."; return }
         guard reminder.sound != .custom || reminder.customSoundFile != nil else { localError = "اختر ملف الصوت أو غيّر نوع الصوت."; return }
-        do { _ = try reminder.validated(); model.saveReminder(reminder) } catch { localError = error.localizedDescription }
+        saving = true; localError = nil
+        let value = reminder
+        saveTask = Task { @MainActor in
+            do {
+                try await model.sounds.prepare(value); try Task.checkCancellation()
+                guard value.repeatRule != .once || value.date > Date() else { throw NSError(domain: "Reminder", code: 1, userInfo: [NSLocalizedDescriptionKey: "انتهى الموعد أثناء تجهيز الصوت. اختر وقتًا جديدًا ثم احفظ."]) }
+                model.saveReminder(value)
+            } catch is CancellationError { }
+            catch { localError = error.localizedDescription; tab = 1 }
+            saving = false
+        }
     }
 }

@@ -60,12 +60,21 @@ public struct LibraryEntry: Codable, Identifiable, Equatable {
     public let chapter: Int
     public var audioURL: String? = nil
     public var bundledAudio: String? = nil
+    public var selectedReciterID: String? = nil
     public var type: ReminderType { ReminderType(rawValue: category) ?? .dhikr }
     public var reminder: Reminder {
         var value = Reminder(title: title, date: Date().addingTimeInterval(3600))
         value.type = type; value.detail = text + "\n\n" + reference
         value.preAlertMinutes = 0; value.repeatRule = .daily
-        if bundledAudio != nil { value.sound = .dhikr }
+        var audio = ReminderAudio(); audio.libraryEntryID = id
+        if category == "quran" { value.sound = .quran; audio.reciterID = selectedReciterID ?? "alafasy" }
+        else if audioURL != nil { value.sound = .library }
+        else { value.sound = .speech; audio.spokenText = text }
+        value.audio = audio
+        #if os(iOS)
+        // AlarmKit's currently shipped editor supports these two bundled modes.
+        value.sound = bundledAudio != nil ? .dhikr : .default
+        #endif
         return value
     }
 }

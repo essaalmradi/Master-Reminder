@@ -50,7 +50,7 @@ struct ReminderWizard: View {
                     }
                 } else if let category {
                     LibraryBrowser(category: category) { entry in value = entry.reminder; step = 2 }
-                    HStack { Button("رجوع للأنواع") { step = 0 }.font(Brand.font(15)); Spacer(); Button("اكتب نصك بنفسك") { var reminder = Reminder(title: "", date: Date().addingTimeInterval(3600)); reminder.type = category.type; value = reminder; step = 2 }.font(Brand.font(15)) }
+                    HStack { Button("رجوع للأنواع") { step = 0 }.font(Brand.font(15)); Spacer(); Button("اكتب نصك بنفسك") { var reminder = Reminder(title: "", date: Date().addingTimeInterval(3600)); reminder.type = category.type; reminder.sound = AudioCatalog.suggestedSound(for: reminder); value = reminder; step = 2 }.font(Brand.font(15)) }
                 }
             } else if let value {
                 HStack { Button("رجوع") { step = category == .custom || category == .prayer ? 0 : 1 }.font(Brand.font(14)); Spacer(); Text("الخطوة الأخيرة · الوقت والتنبيه").font(Brand.font(14)).foregroundStyle(.secondary) }
@@ -64,8 +64,8 @@ struct ReminderWizard: View {
         category = item
         if item == .custom || item == .prayer {
             var reminder = Reminder(title: item == .prayer ? "موعد الصلاة" : "", date: Date().addingTimeInterval(3600))
-            reminder.type = item.type; reminder.preAlertMinutes = model.settings.defaultPreAlert
-            if item == .prayer { reminder.repeatRule = .daily }
+            reminder.type = item.type; reminder.sound = AudioCatalog.suggestedSound(for: reminder); reminder.preAlertMinutes = model.settings.defaultPreAlert
+            if item == .prayer { reminder.repeatRule = .daily; reminder.audio = ReminderAudio(); reminder.audio?.recordingID = "alafasy" }
             value = reminder; step = 2
         } else { step = 1 }
     }

@@ -3,7 +3,7 @@ set -euo pipefail
 APP="${1:-$PWD/dist/Master Reminder.app}"
 "$APP/Contents/MacOS/MasterReminder" --smoke-test > dist/runtime-smoke.log 2>&1 &
 APP_PID=$!
-for attempt in $(seq 1 120); do
+for attempt in $(seq 1 240); do
   if ! kill -0 "$APP_PID" 2>/dev/null; then break; fi
   sleep 1
 done

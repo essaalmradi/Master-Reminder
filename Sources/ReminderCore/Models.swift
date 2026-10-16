@@ -47,7 +47,7 @@ public enum RepeatRule: String, Codable, CaseIterable, Identifiable {
 }
 
 public enum SoundChoice: String, Codable, CaseIterable, Identifiable {
-    case none, `default`, bell, soft, custom, dhikr
+    case none, `default`, bell, soft, custom, dhikr, adhan, quran, library, speech
     public var id: String { rawValue }
     public var title: String {
         switch self {
@@ -57,6 +57,10 @@ public enum SoundChoice: String, Codable, CaseIterable, Identifiable {
         case .soft: return "هادئ"
         case .custom: return "ملف مخصص"
         case .dhikr: return "ذكر مسجّل · سبحان الله وبحمده"
+        case .adhan: return "أذان · اختر المؤذّن"
+        case .quran: return "تلاوة · اختر القارئ"
+        case .library: return "تسجيل الذكر أو الدعاء"
+        case .speech: return "قراءة النص بصوت عربي"
         }
     }
 }
@@ -74,6 +78,8 @@ public struct Reminder: Codable, Identifiable, Equatable {
     public var preAlertMinutes = 5
     public var sound: SoundChoice = .default
     public var customSoundFile: String? = nil
+    /// Optional so profiles created before selectable voices decode unchanged.
+    public var audio: ReminderAudio? = nil
     public var overlay = true
     /// Zero means until dismissed. A visible Escape button always remains available.
     public var overlayDuration = 0
@@ -92,7 +98,8 @@ public struct Reminder: Codable, Identifiable, Equatable {
               weekdays.allSatisfy({ (1...7).contains($0) }),
               repeatRule != .weekdays || !weekdays.isEmpty,
               timeZoneID == nil || TimeZone(identifier: timeZoneID!) != nil,
-              customSoundFile == nil || (customSoundFile! == URL(fileURLWithPath: customSoundFile!).lastPathComponent && !customSoundFile!.contains(".."))
+              customSoundFile == nil || (customSoundFile! == URL(fileURLWithPath: customSoundFile!).lastPathComponent && !customSoundFile!.contains("..")),
+              audio?.isValid ?? true
         else { throw DataError.invalidData }
         return self
     }

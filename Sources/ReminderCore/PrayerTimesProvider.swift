@@ -8,9 +8,13 @@ public struct PrayerEntry: Codable, Identifiable, Equatable {
     public var adjustment = 0
     public var enabled = false
     public var revision = 0
+    public var sound: SoundChoice? = nil
+    public var audio: ReminderAudio? = nil
+    public var customSoundFile: String? = nil
     public var isValid: Bool {
         Self.names.contains(name) && (hour == nil || (0...23).contains(hour!)) &&
-        (0...59).contains(minute) && (-120...120).contains(adjustment) && revision >= 0
+        (0...59).contains(minute) && (-120...120).contains(adjustment) && revision >= 0 &&
+        (audio?.isValid ?? true) && (customSoundFile == nil || (customSoundFile! == URL(fileURLWithPath: customSoundFile!).lastPathComponent && !customSoundFile!.contains("..")))
     }
     public static let names = ["الفجر", "الشروق", "الظهر", "العصر", "المغرب", "العشاء"]
     public static var defaults: [PrayerEntry] {
@@ -38,6 +42,8 @@ public struct ManualPrayerTimesProvider: PrayerTimesProvider {
             reminder.type = .prayer; reminder.detail = "خذ استراحة من العمل"
             reminder.repeatRule = .daily; reminder.timeZoneID = "Africa/Tripoli"
             reminder.preAlertMinutes = settings.defaultPreAlert
+            reminder.sound = entry.sound ?? .default
+            reminder.audio = entry.audio; reminder.customSoundFile = entry.customSoundFile
             return reminder
         }
     }
