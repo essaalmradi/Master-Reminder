@@ -20,7 +20,7 @@ public struct QuranReciter: Identifiable {
     public let name: String
     public let directory: String
 }
-public struct AudioRecording: Identifiable {
+public struct AudioRecording: Identifiable, Sendable {
     public let id: String
     public let title: String
     public let url: URL

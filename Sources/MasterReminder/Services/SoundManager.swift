@@ -57,13 +57,20 @@ import ReminderCore
             configuration.timeoutIntervalForRequest = 30; configuration.timeoutIntervalForResource = 90
             let session = URLSession(configuration: configuration)
             defer { session.finishTasksAndInvalidate() }
-            let (temporary, response) = try await session.download(from: recording.url)
+            let temporary: URL
+            let response: URLResponse
+            do { (temporary, response) = try await session.download(from: recording.url) }
+            catch {
+                // Retry one interrupted connection; no silent substitution of another recording.
+                try Task.checkCancellation()
+                (temporary, response) = try await session.download(from: recording.url)
+            }
             defer { try? FileManager.default.removeItem(at: temporary) }
             guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode),
                   response.url?.scheme == "https" else { throw AudioSelectionError.downloadFailed }
             let size = try temporary.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0
             guard (1...50_000_000).contains(size) else { throw AudioSelectionError.invalidAudio }
-            _ = try self.validatedPlayer(temporary)
+            _ = try self.validatedPlayer(temporary, fileTypeHint: AVFileType.mp3.rawValue)
             try FileManager.default.createDirectory(at: self.cacheDirectory, withIntermediateDirectories: true)
             // A complete validated file is moved into place atomically.
             try FileManager.default.moveItem(at: temporary, to: destination)
@@ -73,7 +80,12 @@ import ReminderCore
         defer { downloads[destination.lastPathComponent] = nil }
         do { _ = try await task.value; try Task.checkCancellation() }
         catch is CancellationError { throw CancellationError() }
-        catch { throw AudioSelectionError.downloadFailed }
+        catch {
+            let failure = error as NSError
+            Log.sound.error("Audio preparation failed: \(recording.id, privacy: .public), \(failure.domain, privacy: .public) \(failure.code)")
+            if ProcessInfo.processInfo.arguments.contains("--smoke-test") { print("SMOKE AUDIO CAUSE: \(recording.id) \(failure)") }
+            throw AudioSelectionError.downloadFailed
+        }
     }
     func play(_ reminder: Reminder, settings: AppSettings) throws {
         stop()
@@ -109,8 +121,8 @@ import ReminderCore
         player = try validatedPlayer(url); player?.delegate = self; player?.volume = volume
         player?.prepareToPlay(); guard player?.play() == true else { throw playbackError }
     }
-    private func validatedPlayer(_ url: URL) throws -> AVAudioPlayer {
-        let player = try AVAudioPlayer(contentsOf: url)
+    private func validatedPlayer(_ url: URL, fileTypeHint: String? = nil) throws -> AVAudioPlayer {
+        let player = try AVAudioPlayer(contentsOf: url, fileTypeHint: fileTypeHint)
         guard player.duration.isFinite && player.duration > 0 else { throw AudioSelectionError.invalidAudio }
         return player
     }
