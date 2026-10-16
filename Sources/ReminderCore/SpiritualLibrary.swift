@@ -1,7 +1,21 @@
 import Foundation
 
 public enum AppResources {
-    public static var bundle: Bundle { Bundle.module }
+    public static let bundle: Bundle = {
+        #if os(macOS)
+        if Bundle.main.bundleURL.pathExtension == "app" {
+            // SwiftPM's CLI accessor searches beside the app, then its absolute
+            // build directory. Installed macOS apps keep bundles in Resources.
+            // Never evaluate that fatal build-path fallback inside a .app.
+            return installedBundle(in: Bundle.main) ?? Bundle.main
+        }
+        #endif
+        return Bundle.module
+    }()
+    static func installedBundle(in application: Bundle) -> Bundle? {
+        guard let resources = application.resourceURL else { return nil }
+        return Bundle(url: resources.appendingPathComponent("MasterReminder_ReminderCore.bundle", isDirectory: true))
+    }
     public static func url(_ name: String, _ ext: String) -> URL? {
         bundle.url(forResource: name, withExtension: ext)
     }

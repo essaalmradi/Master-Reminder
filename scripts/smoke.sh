@@ -1,6 +1,7 @@
 #!/bin/bash
 set -euo pipefail
-"dist/Master Reminder.app/Contents/MacOS/MasterReminder" --smoke-test > dist/runtime-smoke.log 2>&1 &
+APP="${1:-$PWD/dist/Master Reminder.app}"
+"$APP/Contents/MacOS/MasterReminder" --smoke-test > dist/runtime-smoke.log 2>&1 &
 APP_PID=$!
 for attempt in $(seq 1 60); do
   if ! kill -0 "$APP_PID" 2>/dev/null; then break; fi
@@ -28,7 +29,7 @@ PY
 # Unlike --smoke-test, --launch-check cannot force a window open.
 LAUNCH_REPORT="$(python3 -c 'import pathlib,tempfile; print(pathlib.Path(tempfile.gettempdir()) / "MasterReminder-Smoke" / "launch-check.json")')"
 rm -f "$LAUNCH_REPORT"
-open -n "$PWD/dist/Master Reminder.app" --args --launch-check
+open -n "$APP" --args --launch-check
 for attempt in $(seq 1 20); do
   if [ -f "$LAUNCH_REPORT" ]; then break; fi
   sleep 1

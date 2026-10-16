@@ -372,6 +372,7 @@ enum Page: String, CaseIterable, Identifiable {
         var results: [String: Bool] = [:]
         results["mainWindow"] = mainWindow?.isVisible == true
         results["libraryLoaded"] = SpiritualLibrary.shared.entries.count == 6545
+        results["resourcesInsideInstalledApp"] = AppResources.bundle.bundleURL.resolvingSymlinksInPath().path.hasPrefix(Bundle.main.bundleURL.resolvingSymlinksInPath().path + "/")
         results["arabicFontRegistered"] = NSFont(name: Brand.arabicName, size: 18) != nil
         results["brandIconPresent"] = AppResources.url("AppIcon", "png").flatMap { NSImage(contentsOf: $0) } != nil
         results["audioSampleDecodes"] = (try? AVAudioPlayer(contentsOf: AppResources.url("dhikr-sample", "mp3")!)) != nil

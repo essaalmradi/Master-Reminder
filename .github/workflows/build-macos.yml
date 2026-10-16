@@ -6,6 +6,7 @@ on:
     paths-ignore: ['iOS/**', '.github/workflows/build-ios.yml', 'scripts/ios-*', 'README.md']
 permissions:
   contents: read
+  actions: read
 concurrency:
   group: macos-personal-${{ github.ref }}
   cancel-in-progress: false
@@ -39,35 +40,39 @@ jobs:
           MACOS_CERTIFICATE_P12: ${{ secrets.MACOS_CERTIFICATE_P12 }}
           MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
         run: bash scripts/sign.sh
-      - name: Exercise real app runtime
-        run: bash scripts/smoke.sh
       - name: Create and verify DMG
         run: bash scripts/dmg.sh
+      - name: Verify installed app without build resources
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/installed-smoke.sh
       - name: Write build evidence
         run: |
           python3 - <<'PY'
           import json, os, pathlib
-          info = {'version': '0.2.1', 'build': 3, 'sha': os.environ['GITHUB_SHA'],
+          info = {'version': '0.2.2', 'build': 4, 'sha': os.environ['GITHUB_SHA'],
                   'run_id': os.environ['GITHUB_RUN_ID'], 'team_id': 'KTA6FSZK9V',
                   'architecture': 'arm64', 'notarized': False,
                   'codesign_verified': True, 'minimum_macos': '13.0'}
           pathlib.Path('dist/build-info.json').write_text(json.dumps(info, indent=2))
           PY
           echo '### Signed personal macOS build' >> "$GITHUB_STEP_SUMMARY"
-          echo 'DMG: Master-Reminder-0.2.1.dmg — arm64, macOS 13+' >> "$GITHUB_STEP_SUMMARY"
+          echo 'DMG: Master-Reminder-0.2.2.dmg — arm64, macOS 13+' >> "$GITHUB_STEP_SUMMARY"
           echo 'Developer ID team: KTA6FSZK9V. Not notarized (intentional).' >> "$GITHUB_STEP_SUMMARY"
       - name: Upload installable artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Master-Reminder-0.2.1-macOS-arm64
+          name: Master-Reminder-0.2.2-macOS-arm64
           path: |
-            dist/Master-Reminder-0.2.1.dmg
+            dist/Master-Reminder-0.2.2.dmg
             dist/SHA256SUMS.txt
             dist/build-info.json
             dist/codesign.txt
             dist/tests.log
             dist/smoke-results.json
             dist/launch-check.json
+            dist/installed-validation.json
+            dist/previous-version-crash.log
             dist/*.png
           if-no-files-found: error
           retention-days: 30
@@ -81,6 +86,8 @@ jobs:
             dist/tests.log
             dist/runtime-smoke.log
             dist/hang-sample.txt
+            dist/previous-version-crash.log
+            dist/installed-validation.json
           retention-days: 7
       - name: Cleanup signing material
         if: always()
