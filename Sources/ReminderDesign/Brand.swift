@@ -52,20 +52,21 @@ public struct BrandIcon: View {
 
 public struct BrandCard<Content: View>: View {
     @Environment(\.colorScheme) private var scheme
-    private let content: Content
+    let content: Content
     public init(@ViewBuilder content: () -> Content) { self.content = content() }
     public var body: some View {
         content.padding(24).frame(maxWidth: .infinity, alignment: .leading)
-            .background(Brand.panel(scheme), in: RoundedRectangle(cornerRadius: 24))
-            .overlay(RoundedRectangle(cornerRadius: 24).stroke(Brand.line(scheme), lineWidth: 1))
+            .background(Brand.panel(scheme).opacity(0.82), in: RoundedRectangle(cornerRadius: 20))
+            .overlay(RoundedRectangle(cornerRadius: 20).stroke(Brand.line(scheme).opacity(0.6), lineWidth: 0.7))
     }
 }
 
 public struct BrandButton: ButtonStyle {
     public init() {}
     public func makeBody(configuration: Configuration) -> some View {
-        configuration.label.font(Brand.font(16)).padding(.horizontal, 20).padding(.vertical, 10)
-            .foregroundStyle(.white).background(Brand.ocean.opacity(configuration.isPressed ? 0.75 : 1), in: RoundedRectangle(cornerRadius: 14))
+        configuration.label.font(Brand.font(15)).padding(.horizontal, 20).padding(.vertical, 10)
+            .foregroundStyle(.white).background(Brand.ocean.opacity(configuration.isPressed ? 0.8 : 1), in: Capsule())
+            .contentShape(Capsule())
     }
 }
 
@@ -76,15 +77,14 @@ public struct CategoryTile: View {
     public init(_ category: SpiritualCategory, action: @escaping () -> Void) { self.category = category; self.action = action }
     public var body: some View {
         Button(action: action) {
-            VStack(alignment: .leading, spacing: 12) {
-                Image(systemName: category.type.symbol).font(.system(size: 25, weight: .light)).foregroundStyle(Brand.accent(scheme))
-                    .frame(width: 48, height: 48).background(Brand.sky.opacity(0.12), in: RoundedRectangle(cornerRadius: 14))
-                Text(category.title).font(Brand.font(22)).foregroundStyle(Brand.ink(scheme))
-                Text(category.subtitle).font(Brand.font(14)).foregroundStyle(Brand.muted(scheme)).lineLimit(2)
-            }.frame(maxWidth: .infinity, minHeight: 136, alignment: .leading).padding(20)
-                .background(Brand.panel(scheme), in: RoundedRectangle(cornerRadius: 22))
-                .overlay(RoundedRectangle(cornerRadius: 22).stroke(Brand.line(scheme), lineWidth: 1))
-                .contentShape(RoundedRectangle(cornerRadius: 22))
+            VStack(alignment: .leading, spacing: 10) {
+                Image(systemName: category.type.symbol).font(.system(size: 23, weight: .light)).foregroundStyle(Brand.accent(scheme)).padding(.bottom, 8)
+                Text(category.title).font(Brand.font(19)).foregroundStyle(Brand.ink(scheme))
+                Text(category.subtitle).font(Brand.font(13)).foregroundStyle(Brand.muted(scheme)).lineLimit(2)
+            }.frame(maxWidth: .infinity, minHeight: 112, alignment: .leading).padding(20)
+                .background(Brand.panel(scheme).opacity(0.8), in: RoundedRectangle(cornerRadius: 18))
+                .overlay(RoundedRectangle(cornerRadius: 18).stroke(Brand.line(scheme).opacity(0.65), lineWidth: 0.7))
+                .contentShape(RoundedRectangle(cornerRadius: 18))
         }.buttonStyle(.plain)
     }
 }

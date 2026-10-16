@@ -13,7 +13,7 @@ concurrency:
 jobs:
   build:
     name: Test, sign and package arm64
-    runs-on: macos-15
+    runs-on: macos-26
     timeout-minutes: 30
     env:
       MACOSX_DEPLOYMENT_TARGET: '13.0'
@@ -50,21 +50,21 @@ jobs:
         run: |
           python3 - <<'PY'
           import json, os, pathlib
-          info = {'version': '0.2.2', 'build': 4, 'sha': os.environ['GITHUB_SHA'],
+          info = {'version': '0.3.0', 'build': 5, 'sha': os.environ['GITHUB_SHA'],
                   'run_id': os.environ['GITHUB_RUN_ID'], 'team_id': 'KTA6FSZK9V',
                   'architecture': 'arm64', 'notarized': False,
                   'codesign_verified': True, 'minimum_macos': '13.0'}
           pathlib.Path('dist/build-info.json').write_text(json.dumps(info, indent=2))
           PY
           echo '### Signed personal macOS build' >> "$GITHUB_STEP_SUMMARY"
-          echo 'DMG: Master-Reminder-0.2.2.dmg — arm64, macOS 13+' >> "$GITHUB_STEP_SUMMARY"
+          echo 'DMG: Master-Reminder-0.3.0.dmg — arm64, macOS 13+' >> "$GITHUB_STEP_SUMMARY"
           echo 'Developer ID team: KTA6FSZK9V. Not notarized (intentional).' >> "$GITHUB_STEP_SUMMARY"
       - name: Upload installable artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Master-Reminder-0.2.2-macOS-arm64
+          name: Master-Reminder-0.3.0-macOS-arm64
           path: |
-            dist/Master-Reminder-0.2.2.dmg
+            dist/Master-Reminder-0.3.0.dmg
             dist/SHA256SUMS.txt
             dist/build-info.json
             dist/codesign.txt
@@ -88,6 +88,8 @@ jobs:
             dist/hang-sample.txt
             dist/previous-version-crash.log
             dist/installed-validation.json
+            dist/smoke-results.json
+            dist/*.png
           retention-days: 7
       - name: Cleanup signing material
         if: always()

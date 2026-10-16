@@ -9,6 +9,12 @@ import Combine
     var onAction: ((String, String) -> Void)?
     var isPaused: () -> Bool = { false }
     var shouldPlayForegroundSound: () -> Bool = { true }
+    var onSyncError: ((Error) -> Void)?
+    private var syncTask: Task<Void, Never>?
+    private var pendingSync: (plan: [PlannedNotification], settings: AppSettings, prefixes: Set<String>, generation: Int)?
+    private var generation = 0
+    var delayForSmoke: UInt64 = 0
+    private(set) var syncInProgress = false
 
     override init() {
         super.init()
@@ -36,9 +42,27 @@ import Combine
     func openSystemSettings() {
         if let url = URL(string: "x-apple.systempreferences:com.apple.Notifications-Settings.extension") { NSWorkspace.shared.open(url) }
     }
-    func sync(_ plan: [PlannedNotification], settings: AppSettings, validPrefixes: Set<String>) async throws {
+    /// OS notification service latency must never hold the in-app alarm clock.
+    func schedule(_ plan: [PlannedNotification], settings: AppSettings, validPrefixes: Set<String>) {
+        generation += 1
+        pendingSync = (plan, settings, validPrefixes, generation)
+        guard syncTask == nil else { return }
+        syncTask = Task { @MainActor in
+            syncInProgress = true
+            while let request = pendingSync {
+                pendingSync = nil
+                if delayForSmoke > 0 { try? await Task.sleep(nanoseconds: delayForSmoke) }
+                do { try await sync(request.plan, settings: request.settings, validPrefixes: request.prefixes, expectedGeneration: request.generation) }
+                catch { onSyncError?(error) }
+            }
+            syncInProgress = false; syncTask = nil
+        }
+    }
+    private func sync(_ plan: [PlannedNotification], settings: AppSettings, validPrefixes: Set<String>, expectedGeneration: Int) async throws {
         await refresh()
+        guard generation == expectedGeneration else { return }
         let pending = await center.pendingNotificationRequests()
+        guard generation == expectedGeneration else { return }
         let desired = Set(plan.map(\.id))
         let now = Date().timeIntervalSince1970
         center.removePendingNotificationRequests(withIdentifiers: pending.filter { request in
@@ -50,6 +74,7 @@ import Combine
             return !finishing
         }.map(\.identifier))
         let delivered = await center.deliveredNotifications()
+        guard generation == expectedGeneration else { return }
         let cutoff = Date().addingTimeInterval(TimeInterval(-settings.graceMinutes * 60))
         let stale = delivered.filter { notification in
             let id = notification.request.identifier
@@ -59,6 +84,7 @@ import Combine
         guard status == .authorized || status == .provisional else { return }
         let existing = Dictionary(uniqueKeysWithValues: pending.map { ($0.identifier, $0) })
         for item in plan {
+            guard generation == expectedGeneration else { return }
             // A reconcile may cross a due boundary; never create an immediate duplicate.
             guard item.date.timeIntervalSinceNow > 0.5 else { continue }
             let content = UNMutableNotificationContent()
@@ -86,6 +112,7 @@ import Combine
         center.removeDeliveredNotifications(withIdentifiers: ids)
     }
     func clearAll() {
+        generation += 1; pendingSync = nil
         center.removeAllPendingNotificationRequests(); center.removeAllDeliveredNotifications()
     }
     func test() async throws {

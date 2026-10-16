@@ -9,68 +9,117 @@ struct DashboardView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
                 HStack(alignment: .center) {
-                    SectionHeading(title: "مساحة هادئة ليومك", subtitle: "ذكّر قلبك، ورتّب وقتك، وابدأ بلحظة.")
-                    VStack(alignment: .trailing, spacing: 5) { Text(Date(), format: .dateTime.weekday(.wide)).font(Brand.font(22)); Text(Date(), format: .dateTime.day().month(.wide).year()).font(Brand.font(13)).foregroundStyle(.secondary) }
-                }
-                HStack(spacing: 18) {
-                    hero.frame(maxWidth: .infinity)
-                    SpiritualWidgetView(kind: .dhikr).frame(width: 258, height: 246)
-                }
-                HStack(spacing: 16) {
-                    metric("تذكيرات مفعّلة", value: "\(model.allReminders.filter(\.enabled).count)", icon: "bell")
-                    metric("نصوص في مكتبتك", value: "6,545", icon: "books.vertical")
-                    metric("ويدجت على المكتب", value: "\(model.widgets.count)", icon: "rectangle.3.group")
-                }
-                HStack {
-                    Text("ماذا تريد أن تتذكر؟").font(Brand.font(23))
-                    Spacer()
-                    Button("استكشف المكتبة") { model.page = .library }.buttonStyle(.plain).foregroundStyle(Brand.accent(scheme)).font(Brand.font(14))
-                }
-                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 4), spacing: 12) {
-                    ForEach([SpiritualCategory.dhikr, .quran, .dua, .tasbih]) { category in
-                        Button { if category == .tasbih { model.page = .tasbih } else { model.newReminder() } } label: {
-                            HStack(spacing: 10) { Image(systemName: category.type.symbol).foregroundStyle(Brand.accent(scheme)); Text(category.title).font(Brand.font(16)); Spacer() }
-                                .padding(16).frame(maxWidth: .infinity).background(Brand.panel(scheme), in: RoundedRectangle(cornerRadius: 16))
-                                .overlay(RoundedRectangle(cornerRadius: 16).stroke(Brand.line(scheme)))
-                        }.buttonStyle(.plain)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("اليوم").font(Brand.font(30))
+                        Text(Date(), format: .dateTime.weekday(.wide).day().month(.wide)).font(Brand.font(13)).foregroundStyle(.secondary)
                     }
-                }
-                BrandCard {
-                    VStack(alignment: .leading, spacing: 14) {
-                        HStack { Text("المواعيد القادمة").font(Brand.font(23)); Spacer(); Button("عرض الكل") { model.page = .reminders }.buttonStyle(.plain).font(Brand.font(14)).foregroundStyle(Brand.accent(scheme)) }
-                        if model.upcoming.isEmpty {
-                            HStack(spacing: 14) { Image(systemName: "calendar.badge.plus").font(.title).foregroundStyle(Brand.accent(scheme)); VStack(alignment: .leading, spacing: 5) { Text("ابدأ بتذكير تحبّه").font(Brand.font(19)); Text("ذكر الصباح، آية، أو دعاء في الوقت المناسب لك.").font(Brand.font(14)).foregroundStyle(.secondary) }; Spacer() }.padding(.vertical, 12)
-                        } else { ForEach(Array(model.upcoming.prefix(3))) { item in ReminderRow(reminder: item.reminder, date: item.date) } }
-                    }
-                }
-                HStack(spacing: 12) {
-                    Image(systemName: "waveform").foregroundStyle(Brand.accent(scheme))
-                    VStack(alignment: .leading, spacing: 4) { Text("اسمع التجربة").font(Brand.font(18)); Text("ذكر مسجّل من حصن المسلم، يعمل بدون إنترنت.").font(Brand.font(13)).foregroundStyle(.secondary) }
                     Spacer()
-                    Button("استمع") { model.testSound() }.buttonStyle(BrandButton())
-                    Button("إيقاف") { model.sounds.stop() }.font(Brand.font(14))
-                }.padding(.horizontal, 6)
-            }.padding(30)
+                    Button { model.testOverlay() } label: { Label("معاينة التنبيه", systemImage: "rectangle.on.rectangle").font(Brand.font(13)).padding(.horizontal, 14).padding(.vertical, 10) }
+                        .buttonStyle(.plain).brandGlass(radius: 18).accessibilityIdentifier("previewOverlay")
+                }
+                HStack(alignment: .top, spacing: 20) {
+                    nextReminder.frame(maxWidth: .infinity)
+                    dailyVerse.frame(width: 245)
+                }
+                AlarmHealthView(model: model)
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack {
+                        Text("مواعيدك القادمة").font(Brand.font(19))
+                        Spacer()
+                        Button("كل التذكيرات") { model.page = .reminders }.buttonStyle(.plain).font(Brand.font(12)).foregroundStyle(Brand.accent(scheme))
+                    }
+                    if model.upcoming.isEmpty {
+                        HStack(spacing: 12) {
+                            Image(systemName: "calendar").foregroundStyle(.secondary)
+                            Text("مساحة ليومك. أضف موعدًا عندما تحتاجه.").font(Brand.font(14)).foregroundStyle(.secondary)
+                            Spacer()
+                        }.padding(.vertical, 20)
+                    } else {
+                        VStack(spacing: 0) {
+                            ForEach(Array(model.upcoming.prefix(3).enumerated()), id: \.element.id) { index, item in
+                                Button { if !item.reminder.isTemporary { model.editing = item.reminder } } label: { ReminderRow(reminder: item.reminder, date: item.date) }.buttonStyle(.plain)
+                                if index < min(2, model.upcoming.count - 1) { Divider().opacity(0.45) }
+                            }
+                        }
+                    }
+                }.padding(.horizontal, 4)
+                Divider().opacity(0.5)
+                HStack(spacing: 10) {
+                    Text("لحظة لك").font(Brand.font(13)).foregroundStyle(.secondary)
+                    Spacer()
+                    quickAction("أذكار", symbol: "sparkle") { model.newReminder(category: .dhikr) }
+                    quickAction("دعاء", symbol: "hands.sparkles") { model.newReminder(category: .dua) }
+                    quickAction("قرآن", symbol: "book.closed") { model.newReminder(category: .quran) }
+                    quickAction("تسبيح", symbol: "circle.dotted") { model.page = .tasbih }
+                }
+            }.padding(30).frame(maxWidth: 1100)
         }
     }
-    private var hero: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Label(model.upcoming.isEmpty ? "لحظتك الأولى" : "التذكير القادم", systemImage: "sparkles").font(Brand.font(14)).foregroundStyle(Brand.ice)
-            Text(model.upcoming.first?.reminder.title ?? "اجعل للذكر وقتًا").font(Brand.font(32)).lineLimit(2).minimumScaleFactor(0.7)
-            if let next = model.upcoming.first {
-                HStack { Text(next.date, style: .time).font(Brand.number(27)); Text("·"); Text(next.date, style: .relative).font(Brand.font(16)) }.foregroundStyle(Brand.ice)
-            } else { Text("خطوة صغيرة، وأثر يبقى معك طوال اليوم.").font(Brand.font(16)).foregroundStyle(.white.opacity(0.8)) }
-            Spacer(minLength: 0)
-            HStack {
-                Button { model.newReminder() } label: { Label("أضف تذكيرًا", systemImage: "plus").font(Brand.font(15)).padding(.horizontal, 18).padding(.vertical, 9).background(.white, in: Capsule()).foregroundStyle(Brand.ocean) }.buttonStyle(.plain)
-                Spacer()
-                Button("جرّب الآن") { model.testReminder() }.buttonStyle(.plain).font(Brand.font(15)).foregroundStyle(Brand.ice)
-            }
-        }.padding(26).frame(maxWidth: .infinity, minHeight: 246, maxHeight: 246, alignment: .leading).foregroundStyle(.white)
-            .background(Brand.gradient, in: RoundedRectangle(cornerRadius: 26))
+    private var nextReminder: some View {
+        BrandCard {
+            VStack(alignment: .leading, spacing: 18) {
+                Label("التذكير القادم", systemImage: "bell").font(Brand.font(13)).foregroundStyle(.secondary)
+                if let next = model.upcoming.first {
+                    Text(next.reminder.title).font(Brand.font(26)).lineLimit(2)
+                    HStack(alignment: .lastTextBaseline, spacing: 12) {
+                        Text(next.date, style: .time).font(Brand.number(39))
+                        Text(next.date, style: .relative).font(Brand.font(13)).foregroundStyle(.secondary)
+                    }
+                    HStack {
+                        Label(next.reminder.overlay && model.settings.overlayEnabled ? "على الشاشة" : "إشعار فقط", systemImage: "rectangle").font(Brand.font(12)).foregroundStyle(.secondary)
+                        Spacer()
+                        Button("تعديل") { model.editing = next.reminder }.font(Brand.font(13)).buttonStyle(.plain).foregroundStyle(Brand.accent(scheme))
+                    }
+                } else {
+                    Text("وقتٌ لما يهمّك").font(Brand.font(28))
+                    Text("ذكر، صلاة، أو موعد صغير لنفسك.").font(Brand.font(14)).foregroundStyle(.secondary)
+                    Button { model.newReminder() } label: { Label("أضف تذكيرًا", systemImage: "plus") }.buttonStyle(BrandButton()).padding(.top, 6)
+                }
+            }.frame(maxWidth: .infinity, minHeight: 182, alignment: .leading)
+        }
     }
-    private func metric(_ title: String, value: String, icon: String) -> some View {
-        HStack(spacing: 12) { Image(systemName: icon).foregroundStyle(Brand.accent(scheme)); VStack(alignment: .leading, spacing: 5) { Text(value).font(Brand.number(22)); Text(title).font(Brand.font(13)).foregroundStyle(.secondary) }; Spacer(minLength: 0) }
-            .padding(18).frame(maxWidth: .infinity).background(Brand.panel(scheme), in: RoundedRectangle(cornerRadius: 18)).overlay(RoundedRectangle(cornerRadius: 18).stroke(Brand.line(scheme)))
+    private var dailyVerse: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            HStack { Image(systemName: "quote.opening").font(.system(size: 20, weight: .light)); Spacer(); Text("آية اليوم").font(Brand.font(12)) }.foregroundStyle(Brand.accent(scheme).opacity(0.75))
+            Text(SpiritualLibrary.shared.dailyVerse()?.text ?? "").font(Brand.font(21)).lineSpacing(8).frame(maxWidth: .infinity, alignment: .leading)
+            Spacer(minLength: 0)
+            Text(SpiritualLibrary.shared.dailyVerse()?.reference ?? "").font(Brand.font(10)).foregroundStyle(.secondary).lineLimit(2)
+            Button("تأمّل في المكتبة") { model.page = .library }.font(Brand.font(12)).buttonStyle(.plain).foregroundStyle(Brand.accent(scheme))
+        }.padding(24).frame(height: 230).frame(maxWidth: .infinity)
+            .background(Brand.sky.opacity(scheme == .dark ? 0.08 : 0.055), in: RoundedRectangle(cornerRadius: 20))
+    }
+    private func quickAction(_ title: String, symbol: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) { Label(title, systemImage: symbol).font(Brand.font(13)).padding(.horizontal, 12).padding(.vertical, 9) }.buttonStyle(.plain).brandGlass(radius: 15)
+    }
+}
+
+struct AlarmHealthView: View {
+    @ObservedObject var model: AppModel
+    @ObservedObject var notifications: NotificationManager
+    @Environment(\.colorScheme) private var scheme
+    init(model: AppModel) { self.model = model; notifications = model.notifications }
+    private var paused: Bool { model.settings.isPaused(at: Date()) }
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 10) {
+                Image(systemName: paused ? "pause.circle" : (model.settings.overlayEnabled ? "checkmark.circle" : "rectangle.slash"))
+                    .foregroundStyle(Brand.accent(scheme))
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(paused ? "التذكيرات متوقفة مؤقتًا" : (model.settings.overlayEnabled ? "شاشة التنبيه مفعّلة" : "شاشة التنبيه متوقفة")).font(Brand.font(14))
+                    Text(paused ? "استأنفها ليظهر التنبيه في موعده." : (model.settings.overlayEnabled ? "تستمر بعد إغلاق النافذة من الزر الأحمر." : "فعّلها ليظهر التذكير فوق التطبيقات.")).font(Brand.font(11)).foregroundStyle(.secondary)
+                }
+                Spacer()
+                if paused { Button("استئناف") { model.resume() }.buttonStyle(BrandButton()) }
+                else if !model.settings.overlayEnabled { Button("تفعيل") { model.updateSettings { $0.overlayEnabled = true } }.buttonStyle(BrandButton()) }
+                else { Button("اختبار بعد 10 ثوانٍ") { model.testReminder() }.font(Brand.font(12)).buttonStyle(.bordered).accessibilityIdentifier("testScheduledReminder") }
+            }
+            if notifications.status == .denied || notifications.status == .notDetermined {
+                HStack {
+                    Text("إشعارات macOS غير مفعّلة؛ شاشة التنبيه تعمل بشكل مستقل.").font(Brand.font(11)).foregroundStyle(.secondary)
+                    Spacer()
+                    Button("إعداد الإشعارات") { model.page = .settings }.font(Brand.font(11)).buttonStyle(.plain).foregroundStyle(Brand.accent(scheme))
+                }
+            }
+        }.padding(16).background(Brand.panel(scheme).opacity(0.6), in: RoundedRectangle(cornerRadius: 16))
     }
 }

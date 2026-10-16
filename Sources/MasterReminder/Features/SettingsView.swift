@@ -11,7 +11,7 @@ struct SettingsView: View {
     init(model: AppModel) { self.model = model; notifications = model.notifications; login = model.login }
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            SectionHeading(title: "على طريقتك", subtitle: "تفاصيل صغيرة تجعل التذكير مناسبًا لك.").padding(32)
+            SectionHeading(title: "الإعدادات", subtitle: "التنبيهات، الصوت، والمظهر.").padding(32)
             Form {
                 Section("عام") {
                     Toggle("تشغيل Master Reminder عند الدخول", isOn: Binding(get: { login.enabled }, set: model.setLogin))
@@ -36,6 +36,8 @@ struct SettingsView: View {
                     Button("تجربة الإشعار") { model.testNotification() }
                 }
                 Section("شاشة التنبيه") {
+                    Text("تعمل شاشة التنبيه ما دام التطبيق يعمل من شريط القوائم، حتى لو لم تسمح بإشعارات macOS.").font(Brand.font(12)).foregroundStyle(.secondary)
+                    if let last = model.lastPresentation { LabeledContent("آخر ظهور على الشاشة") { Text(last, style: .time) } }
                     Toggle("تفعيل شاشة التنبيه", isOn: model.setting(\.overlayEnabled))
                     Picker("الشاشات", selection: model.setting(\.allScreens)) { Text("كل الشاشات").tag(true); Text("الشاشة الرئيسية فقط").tag(false) }
                     HStack { Text("عتامة الخلفية"); Slider(value: model.setting(\.overlayOpacity), in: 0.75...0.95); Text("\(Int(model.settings.overlayOpacity * 100))٪").monospacedDigit() }

@@ -106,16 +106,16 @@ public struct LibraryBrowser: View {
                                 VStack(alignment: .leading, spacing: 8) {
                                     HStack {
                                         Image(systemName: entry.type.symbol).foregroundStyle(Brand.accent(scheme))
-                                        Text(entry.title).font(Brand.font(17))
+                                        Text(entry.title).font(Brand.font(15))
                                         Spacer()
                                         if favoriteSet.contains(entry.id) { Image(systemName: "heart.fill").foregroundStyle(Brand.accent(scheme)) }
                                         Image(systemName: "chevron.left").font(.caption).foregroundStyle(.secondary)
                                     }
-                                    Text(entry.text).font(Brand.font(18)).lineSpacing(5).lineLimit(2).multilineTextAlignment(.leading)
+                                    Text(entry.text).font(Brand.font(17)).lineSpacing(5).lineLimit(2).multilineTextAlignment(.leading)
                                     Text(entry.reference).font(Brand.font(12)).foregroundStyle(.secondary).lineLimit(1)
-                                }.padding(18).frame(maxWidth: .infinity, alignment: .leading)
+                                }.padding(16).frame(maxWidth: .infinity, alignment: .leading)
                                     .background(Brand.panel(scheme), in: RoundedRectangle(cornerRadius: 18))
-                                    .overlay(RoundedRectangle(cornerRadius: 18).stroke(Brand.line(scheme)))
+                                    .overlay(RoundedRectangle(cornerRadius: 18).stroke(Brand.line(scheme).opacity(0.55), lineWidth: 0.7))
                                     .contentShape(RoundedRectangle(cornerRadius: 18))
                             }.buttonStyle(.plain)
                         }
@@ -184,13 +184,14 @@ public struct LibraryDetail: View {
         }.padding(28).background(Brand.page(scheme)).environment(\.layoutDirection, .rightToLeft)
         .font(Brand.font()).tint(Brand.ocean)
         #if os(macOS)
-        .frame(width: 650, height: 710)
+        .frame(width: 630, height: 640)
         #endif
         .onDisappear { audio.stop() }
     }
 }
 
 public struct TasbihView: View {
+    @Environment(\.colorScheme) private var scheme
     @AppStorage("tasbih-session-count") private var count = 0
     @AppStorage("tasbih-total-count") private var total = 0
     @State private var selected = 0
@@ -199,7 +200,7 @@ public struct TasbihView: View {
     public init() {}
     public var body: some View {
         VStack(spacing: 24) {
-            Text("لحظة ذكر").font(Brand.font(32))
+            Text("التسبيح").font(Brand.font(27))
             Text("اضغط بهدوء، وخذ وقتك.").font(Brand.font(16)).foregroundStyle(.secondary)
             Picker("الذكر", selection: $selected) { ForEach(phrases.indices, id: \.self) { Text(phrases[$0]).tag($0) } }.font(Brand.font(20)).frame(maxWidth: 320)
             Button { count += 1; total += 1 } label: {
@@ -207,8 +208,7 @@ public struct TasbihView: View {
                     Text("\(count)").font(Brand.number(64))
                     Text(phrases[selected]).font(Brand.font(23))
                     Image(systemName: "hand.tap").font(.title2)
-                }.foregroundStyle(.white).frame(width: 260, height: 260).background(Brand.gradient, in: Circle())
-                    .overlay(Circle().stroke(Brand.sky.opacity(0.45), lineWidth: 2))
+                }.foregroundStyle(Brand.accent(scheme)).frame(width: 260, height: 260).brandGlass(radius: 130)
             }.buttonStyle(.plain).accessibilityLabel("زيادة عداد التسبيح، العدد الحالي \(count)")
             Text("المجموع على هذا الجهاز: \(total)").font(Brand.font(15)).foregroundStyle(.secondary)
             Button("تصفير الجلسة") { reset = true }.font(Brand.font(15))

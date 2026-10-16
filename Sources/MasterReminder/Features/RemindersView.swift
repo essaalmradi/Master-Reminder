@@ -28,7 +28,7 @@ struct RemindersView: View {
                     ForEach(filtered) { reminder in
                         VStack(alignment: .leading, spacing: 8) {
                             HStack {
-                                ReminderRow(reminder: reminder, date: reminder.date)
+                                ReminderRow(reminder: reminder, date: model.upcoming.first(where: { $0.reminder.id == reminder.id })?.date ?? reminder.date)
                                 Toggle("مفعّل", isOn: Binding(get: { reminder.enabled }, set: { var value = reminder; value.enabled = $0; model.saveReminder(value) })).labelsHidden().toggleStyle(.switch)
                                 Button { model.editing = reminder } label: { Image(systemName: "pencil") }.help("تعديل")
                                 Button(role: .destructive) { deleting = reminder } label: { Image(systemName: "trash") }.help("حذف")
@@ -38,7 +38,8 @@ struct RemindersView: View {
                                 Text(reminder.date, style: .date)
                                 Text(reminder.preAlertMinutes == 0 ? "بدون تنبيه مسبق" : "قبل \(reminder.preAlertMinutes) دقائق")
                                 Label(reminder.sound.title, systemImage: "speaker.wave.2")
-                                if reminder.overlay { Label("شاشة تنبيه", systemImage: "rectangle") }
+                                if reminder.overlay { Label(model.settings.overlayEnabled ? "على الشاشة" : "الشاشة متوقفة من الإعدادات", systemImage: "rectangle") }
+                                if reminder.repeatRule == .once && reminder.date < Date() { Text("انتهى الموعد").foregroundStyle(.secondary) }
                             }.font(Brand.font(12)).foregroundStyle(.secondary)
                         }.padding(.vertical, 8).opacity(reminder.enabled ? 1 : 0.55)
                     }
@@ -57,18 +58,25 @@ struct ReminderEditor: View {
     @EnvironmentObject var model: AppModel
     @Environment(\.dismiss) private var dismiss
     @State var reminder: Reminder
+    var embedded = false
     @State private var preSelection = 5
     @State private var localError: String?
     private let weekdays = ["الأحد", "الإثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"]
     var body: some View {
         VStack(spacing: 0) {
-            HStack { Text("تفاصيل التذكير").font(Brand.font(24)); Spacer(); Button("إلغاء") { dismiss() } }.padding(24)
+            if !embedded { HStack { Text("تفاصيل التذكير").font(Brand.font(23)); Spacer(); Button("إلغاء") { dismiss() } }.padding(20) }
             Form {
                 Section("الموعد") {
                     TextField("العنوان", text: $reminder.title)
                     TextField("الوصف", text: $reminder.detail, axis: .vertical).lineLimit(2...4)
                     Picker("النوع", selection: $reminder.type) { ForEach(ReminderType.allCases) { Text($0.title).tag($0) } }
                     DatePicker("التاريخ والوقت", selection: $reminder.date)
+                    HStack(spacing: 8) {
+                        Text("موعد سريع").font(Brand.font(12)).foregroundStyle(.secondary)
+                        Button("بعد 30 ثانية") { reminder.date = Date().addingTimeInterval(30); reminder.preAlertMinutes = 0; preSelection = 0 }
+                        Button("بعد 5 دقائق") { reminder.date = Date().addingTimeInterval(300) }
+                        Button("بعد ساعة") { reminder.date = Date().addingTimeInterval(3600) }
+                    }.font(Brand.font(12)).buttonStyle(.bordered)
                     Picker("التكرار", selection: $reminder.repeatRule) { ForEach(RepeatRule.allCases) { Text($0.title).tag($0) } }
                     if reminder.repeatRule == .weekdays {
                         LazyVGrid(columns: [GridItem(.adaptive(minimum: 100))]) {
@@ -97,16 +105,17 @@ struct ReminderEditor: View {
                     Toggle("السماح بالتأجيل", isOn: $reminder.snoozeAllowed)
                     Toggle("التذكير مفعّل", isOn: $reminder.enabled)
                 }
-                if let localError { Text(localError).foregroundStyle(.red) }
+                
             }.formStyle(.grouped)
+            if let localError { Text(localError).font(Brand.font(13)).foregroundStyle(.red).padding(.horizontal, 20).padding(.vertical, 8) }
             Divider()
             HStack {
-                Text("التوقيت حسب إعدادات الماك").font(Brand.font(14)).foregroundStyle(.secondary)
+                Button("معاينة على الشاشة") { model.previewReminder(reminder) }.font(Brand.font(12)).buttonStyle(.plain)
                 Spacer()
                 Button("حفظ التذكير") { save() }.buttonStyle(.borderedProminent).keyboardShortcut(.defaultAction)
                     .disabled(reminder.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }.padding(20)
-        }.font(Brand.font(16)).frame(width: 660, height: 690).environment(\.layoutDirection, .rightToLeft).tint(Brand.ocean)
+        }.font(Brand.font(14)).frame(width: embedded ? 650 : 680, height: embedded ? 570 : 650).environment(\.layoutDirection, .rightToLeft).tint(Brand.ocean)
         .onAppear { preSelection = [0, 5, 10, 15, 30].contains(reminder.preAlertMinutes) ? reminder.preAlertMinutes : -1 }
         .onDisappear { model.sounds.stop() }
     }

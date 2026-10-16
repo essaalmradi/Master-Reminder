@@ -10,12 +10,15 @@ struct RootView: View {
     }
     var body: some View {
         HStack(spacing: 0) {
-            sidebar.frame(width: 218)
-            Rectangle().fill(Brand.line(scheme)).frame(width: 1)
+            sidebar.frame(width: 202).padding(12)
             VStack(spacing: 0) {
                 if let notice = model.notice {
-                    HStack { Text(notice).font(Brand.font(15)); Spacer(); Button { model.notice = nil } label: { Image(systemName: "xmark") }.buttonStyle(.plain) }
-                        .padding(14).background(Brand.sky.opacity(0.1))
+                    HStack(spacing: 12) {
+                        Image(systemName: "info.circle")
+                        Text(notice).font(Brand.font(13))
+                        Spacer()
+                        Button { model.notice = nil } label: { Image(systemName: "xmark") }.buttonStyle(.plain)
+                    }.padding(12).background(Brand.sky.opacity(0.09), in: RoundedRectangle(cornerRadius: 12)).padding([.horizontal, .top], 24)
                 }
                 Group {
                     switch model.page {
@@ -28,9 +31,15 @@ struct RootView: View {
                     case .settings: SettingsView(model: model)
                     }
                 }.frame(maxWidth: .infinity, maxHeight: .infinity)
-            }.background(Brand.page(scheme))
+            }
         }
-        .font(Brand.font(17)).foregroundStyle(Brand.ink(scheme)).tint(Brand.ocean)
+        .background {
+            ZStack {
+                Brand.page(scheme)
+                LinearGradient(colors: [Brand.sky.opacity(scheme == .dark ? 0.06 : 0.07), .clear, Brand.ice.opacity(0.035)], startPoint: .topTrailing, endPoint: .bottomLeading)
+            }
+        }
+        .font(Brand.font(15)).foregroundStyle(Brand.ink(scheme)).tint(Brand.accent(scheme))
         .environment(\.layoutDirection, .rightToLeft).environment(\.locale, Locale(identifier: "ar_LY"))
         .preferredColorScheme(colorScheme)
         .sheet(item: $model.editing) { reminder in ReminderEditor(reminder: reminder).environmentObject(model) }
@@ -39,26 +48,42 @@ struct RootView: View {
         .alert("نحتاج انتباهك", isPresented: Binding(get: { model.error != nil }, set: { if !$0 { model.error = nil } })) { Button("حسنًا") { model.error = nil } } message: { Text(model.error ?? "") }
     }
     private var sidebar: some View {
-        VStack(alignment: .leading, spacing: 26) {
-            HStack(spacing: 12) { BrandIcon(size: 48); VStack(alignment: .leading, spacing: 3) { Text("Master").font(Brand.latin(21)); Text("Reminder").font(Brand.latin(15)).foregroundStyle(Brand.muted(scheme)) } }.padding(.top, 20)
-            Text("لحظة تطمئن فيها").font(Brand.font(17)).foregroundStyle(Brand.muted(scheme))
-            Button { model.newReminder() } label: { Label("تذكير جديد", systemImage: "plus").frame(maxWidth: .infinity) }.buttonStyle(BrandButton())
-            VStack(spacing: 6) {
-                ForEach(Page.allCases) { page in
-                    Button { model.page = page } label: {
-                        HStack(spacing: 12) { Image(systemName: page.symbol).frame(width: 20); Text(page.title).font(Brand.font(16)); Spacer(); if model.page == page { Circle().fill(Brand.accent(scheme)).frame(width: 5, height: 5) } }
-                            .padding(.horizontal, 14).padding(.vertical, 11)
-                            .background(model.page == page ? Brand.sky.opacity(0.13) : .clear, in: RoundedRectangle(cornerRadius: 13))
-                            .foregroundStyle(model.page == page ? Brand.accent(scheme) : Brand.muted(scheme))
-                    }.buttonStyle(.plain)
+        VStack(alignment: .leading, spacing: 24) {
+            HStack(spacing: 10) {
+                BrandIcon(size: 36)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Master").font(Brand.latin(17))
+                    Text("Reminder").font(Brand.latin(12)).foregroundStyle(.secondary)
                 }
+            }.padding(.horizontal, 8).padding(.top, 10)
+            VStack(spacing: 4) {
+                ForEach(Page.allCases.filter { $0 != .settings }) { page in navItem(page) }
             }
-            Spacer(minLength: 12)
-            VStack(alignment: .leading, spacing: 10) {
-                Label(model.settings.isPaused(at: Date()) ? "متوقف مؤقتًا" : "معك في الخلفية", systemImage: "circle.fill").font(Brand.font(12)).foregroundStyle(Brand.muted(scheme))
-                Text("\(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "—") · محفوظ على جهازك").font(Brand.font(12)).foregroundStyle(Brand.muted(scheme))
+            Spacer(minLength: 16)
+            Button { model.newReminder() } label: { Label("تذكير جديد", systemImage: "plus").frame(maxWidth: .infinity) }.buttonStyle(BrandButton()).accessibilityIdentifier("newReminder")
+            VStack(spacing: 12) {
+                Divider().opacity(0.45)
+                navItem(.settings)
+                HStack(spacing: 7) {
+                    Circle().fill(model.settings.isPaused(at: Date()) ? Color.secondary : Brand.accent(scheme)).frame(width: 5, height: 5)
+                    Text(model.settings.isPaused(at: Date()) ? "متوقف مؤقتًا" : "يعمل في الخلفية").font(Brand.font(11)).foregroundStyle(.secondary)
+                    Spacer()
+                    Text(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "").font(Brand.number(10)).foregroundStyle(.tertiary)
+                }.padding(.horizontal, 8)
             }
-        }.padding(20).background(Brand.panel(scheme))
+        }.padding(14).brandGlass(radius: 22)
+    }
+    private func navItem(_ page: Page) -> some View {
+        Button { model.page = page } label: {
+            HStack(spacing: 11) {
+                Image(systemName: page.symbol).font(.system(size: 16, weight: .regular)).frame(width: 20)
+                Text(page.title).font(Brand.font(15))
+                Spacer()
+            }.padding(.horizontal, 12).padding(.vertical, 11)
+                .foregroundStyle(model.page == page ? Brand.accent(scheme) : Brand.ink(scheme).opacity(0.75))
+                .background(model.page == page ? Brand.sky.opacity(scheme == .dark ? 0.13 : 0.12) : .clear, in: RoundedRectangle(cornerRadius: 11))
+                .contentShape(RoundedRectangle(cornerRadius: 11))
+        }.buttonStyle(.plain).accessibilityIdentifier("page.\(page.rawValue)")
     }
 }
 
@@ -67,8 +92,8 @@ struct SectionHeading: View {
     let subtitle: String
     var body: some View {
         VStack(alignment: .leading, spacing: 5) {
-            Text(title).font(Brand.font(32))
-            Text(subtitle).font(Brand.font(15)).foregroundStyle(.secondary)
+            Text(title).font(Brand.font(27))
+            Text(subtitle).font(Brand.font(13)).foregroundStyle(.secondary)
         }.frame(maxWidth: .infinity, alignment: .leading)
     }
 }
@@ -78,15 +103,18 @@ struct ReminderRow: View {
     let date: Date
     @Environment(\.colorScheme) private var scheme
     var body: some View {
-        HStack(spacing: 14) {
-            Image(systemName: reminder.type.symbol).font(.system(size: 20, weight: .light)).foregroundStyle(Brand.accent(scheme))
-                .frame(width: 44, height: 44).background(Brand.sky.opacity(0.12), in: RoundedRectangle(cornerRadius: 14))
-            VStack(alignment: .leading, spacing: 4) {
-                Text(reminder.title).font(Brand.font(18)).lineLimit(1)
-                Text("\(reminder.type.title) · \(reminder.repeatRule.title)").font(Brand.font(13)).foregroundStyle(.secondary)
+        HStack(spacing: 13) {
+            Image(systemName: reminder.type.symbol).font(.system(size: 18, weight: .light)).foregroundStyle(Brand.accent(scheme))
+                .frame(width: 34, height: 34).background(Brand.sky.opacity(0.09), in: RoundedRectangle(cornerRadius: 11))
+            VStack(alignment: .leading, spacing: 3) {
+                Text(reminder.title).font(Brand.font(16)).lineLimit(1)
+                Text("\(reminder.type.title) · \(reminder.repeatRule.title)").font(Brand.font(12)).foregroundStyle(.secondary)
             }
             Spacer()
-            Text(date, style: .time).font(Brand.number(19))
+            VStack(alignment: .trailing, spacing: 3) {
+                Text(date, style: .time).font(Brand.number(17))
+                if !Calendar.current.isDateInToday(date) { Text(date, format: .dateTime.day().month(.abbreviated)).font(Brand.font(11)).foregroundStyle(.secondary) }
+            }
         }.padding(.vertical, 8)
     }
 }

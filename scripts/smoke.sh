@@ -3,7 +3,7 @@ set -euo pipefail
 APP="${1:-$PWD/dist/Master Reminder.app}"
 "$APP/Contents/MacOS/MasterReminder" --smoke-test > dist/runtime-smoke.log 2>&1 &
 APP_PID=$!
-for attempt in $(seq 1 60); do
+for attempt in $(seq 1 120); do
   if ! kill -0 "$APP_PID" 2>/dev/null; then break; fi
   sleep 1
 done
@@ -19,10 +19,10 @@ import json, os, pathlib, shutil, tempfile
 source = pathlib.Path(tempfile.gettempdir()) / 'MasterReminder-Smoke' / 'smoke-results.json'
 results = json.loads(source.read_text())
 print(json.dumps(results, indent=2))
-assert results and all(results.values()), 'A runtime smoke check failed'
 shutil.copy(source, 'dist/smoke-results.json')
 for preview in source.parent.glob('*.png'):
     shutil.copy(preview, pathlib.Path('dist') / preview.name)
+assert results and all(results.values()), 'A runtime smoke check failed'
 PY
 
 # Reproduce the reported launch failure with an existing, completed profile.

@@ -39,8 +39,8 @@ public struct SpiritualWidgetView: View {
                 HStack { Text("Master Reminder").font(Brand.latin(10)); Spacer(); Text("لحظة تطمئن فيها").font(Brand.font(11)) }.foregroundStyle(.white.opacity(0.5))
             }
         }.padding(compact ? 16 : 24).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
-            .background(Brand.gradient)
-            .overlay(alignment: .topTrailing) { Circle().fill(Brand.sky.opacity(0.08)).frame(width: 180, height: 180).blur(radius: 32).offset(x: 90, y: -100).allowsHitTesting(false) }
+            .background(Brand.night.opacity(0.94))
+
             .foregroundStyle(.white).clipShape(RoundedRectangle(cornerRadius: 26))
             .overlay(RoundedRectangle(cornerRadius: 26).stroke(.white.opacity(0.12), lineWidth: 1))
             .environment(\.layoutDirection, .rightToLeft)

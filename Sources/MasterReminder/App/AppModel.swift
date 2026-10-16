@@ -25,6 +25,8 @@ enum Page: String, CaseIterable, Identifiable {
     @Published var page: Page = .dashboard
     @Published var editing: Reminder?
     @Published var isCreating = false
+    @Published var creationCategory: SpiritualCategory?
+    @Published private(set) var lastPresentation: Date?
     let widgets = DesktopWidgetManager()
     @Published var error: String?
     @Published var notice: String?
@@ -46,6 +48,8 @@ enum Page: String, CaseIterable, Identifiable {
     private var transientLedger: [String: EventRecord] = [:]
     private var activeQueue: [Occurrence] = []
     private var recent: [String: Occurrence] = [:]
+    private var schedulerActivity: NSObjectProtocol?
+    private var suspendedOverlays: [Occurrence] = []
     var isSmoke: Bool { ProcessInfo.processInfo.arguments.contains("--smoke-test") }
     private var isLaunchCheck: Bool { ProcessInfo.processInfo.arguments.contains("--launch-check") }
     var settings: AppSettings { data.settings }
@@ -73,7 +77,8 @@ enum Page: String, CaseIterable, Identifiable {
         notifications.isPaused = { [weak self] in self?.settings.isPaused(at: Date()) ?? false }
         notifications.shouldPlayForegroundSound = { [weak self] in self?.settings.soundEnabled ?? true }
         notifications.onAction = { [weak self] id, action in self?.notificationAction(id: id, action: action) }
-        wake = WakeObserver(action: { [weak self] in self?.login.refresh(); self?.reconcile() }, sleep: { [weak self] in self?.prepareForSleep() })
+        notifications.onSyncError = { [weak self] error in self?.report("تعذّرت جدولة إشعارات macOS. شاشة التنبيه داخل التطبيق مستقلة وتستمر بالعمل.", error) }
+        wake = WakeObserver(action: { [weak self] in self?.login.refresh(); self?.restoreAfterWake(); self?.reconcile() }, sleep: { [weak self] in self?.prepareForSleep() })
         timer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in Task { @MainActor in self?.reconcile() } }
         if let timer { RunLoop.main.add(timer, forMode: .common) }
         reconcile()
@@ -97,7 +102,7 @@ enum Page: String, CaseIterable, Identifiable {
         data = old; return false
     }
     func report(_ message: String, _ failure: Error) { error = message + ": " + failure.localizedDescription }
-    func newReminder() { isCreating = true; openWindow() }
+    func newReminder(category: SpiritualCategory? = nil) { creationCategory = category; isCreating = true; openWindow() }
     func reminderFromLibrary(_ entry: LibraryEntry) { editing = entry.reminder; openWindow() }
     func saveReminder(_ reminder: Reminder) {
         do {
@@ -114,7 +119,7 @@ enum Page: String, CaseIterable, Identifiable {
         let old = settings
         guard transaction({ update(&$0.settings); $0.settings.normalize() }) else { return }
         if old.soundEnabled != settings.soundEnabled || old.volume != settings.volume { sounds.stop() }
-        if settings.isPaused(at: Date()) || !settings.overlayEnabled { overlay.close(); sounds.stop(); activeQueue.removeAll() }
+        if settings.isPaused(at: Date()) || !settings.overlayEnabled { overlay.close(); sounds.stop(); activeQueue.removeAll(); suspendedOverlays.removeAll() }
         // Changes to global sound require replacement of pending contents even with the same IDs.
         if old.soundEnabled != settings.soundEnabled { notifications.clearAll() }
         reconcile()
@@ -134,6 +139,7 @@ enum Page: String, CaseIterable, Identifiable {
     }
     private func invalidate(_ id: UUID) {
         activeQueue.removeAll { $0.reminder.id == id }
+        suspendedOverlays.removeAll { $0.reminder.id == id }
         recent = recent.filter { $0.value.reminder.id != id }
         if overlay.current?.reminder.id == id { overlay.close(); sounds.stop(); presentNext() }
     }
@@ -146,15 +152,10 @@ enum Page: String, CaseIterable, Identifiable {
     func reconcile() {
         if reconciling { dirty = true; return }
         reconciling = true
-        Task { @MainActor in
-            repeat {
-                dirty = false
-                await self.reconcileOnce()
-            } while dirty
-            reconciling = false
-        }
+        repeat { dirty = false; reconcileOnce() } while dirty
+        reconciling = false
     }
-    private func reconcileOnce() async {
+    private func reconcileOnce() {
         let now = Date()
         if let pause = settings.pausedUntil, pause <= now {
             // Reminders inside a pause never burst on resume or restart.
@@ -198,10 +199,14 @@ enum Page: String, CaseIterable, Identifiable {
         for item in upcoming { recent[item.id] = item }
         presentNext()
         scheduleDeadline(now: now)
+        if !upcoming.isEmpty && schedulerActivity == nil {
+            schedulerActivity = ProcessInfo.processInfo.beginActivity(options: .userInitiatedAllowingIdleSystemSleep, reason: "Deliver user-scheduled reminders on time")
+        } else if upcoming.isEmpty, let activity = schedulerActivity {
+            ProcessInfo.processInfo.endActivity(activity); schedulerActivity = nil
+        }
         let plan = ReminderScheduler.notificationPlan(occurrences: upcoming, now: now, settings: settings)
         let prefixes = Set(allReminders.map { "mr-\($0.id.uuidString)-r\($0.revision)-" })
-        do { try await notifications.sync(plan, settings: settings, validPrefixes: prefixes) }
-        catch { report("تعذّرت جدولة بعض الإشعارات؛ سنعيد المحاولة", error); Log.scheduler.error("Notification reconcile failed") }
+        notifications.schedule(plan, settings: settings, validPrefixes: prefixes)
     }
     private func scheduleDeadline(now: Date) {
         deadline?.invalidate()
@@ -215,13 +220,16 @@ enum Page: String, CaseIterable, Identifiable {
         while !activeQueue.isEmpty {
             let occurrence = activeQueue.removeFirst()
             guard Date().timeIntervalSince(occurrence.date) <= TimeInterval(settings.graceMinutes * 60) else { continue }
-            do { try sounds.play(occurrence.reminder, settings: settings) } catch { report("تعذّر تشغيل الصوت", error) }
             if settings.overlayEnabled && occurrence.reminder.overlay {
-                overlay.show(occurrence, settings: settings,
+                let shown = overlay.show(occurrence, settings: settings,
                     done: { [weak self] in self?.finish(occurrence) },
                     snooze: { [weak self] minutes in self?.snooze(occurrence, minutes: minutes) })
+                if !shown { activeQueue.insert(occurrence, at: 0); notice = "تعذّر الوصول إلى الشاشة. سنعيد إظهار التنبيه عند توفرها."; break }
+                lastPresentation = Date()
+                do { try sounds.play(occurrence.reminder, settings: settings) } catch { report("تعذّر تشغيل الصوت", error) }
                 break
             }
+            do { try sounds.play(occurrence.reminder, settings: settings) } catch { report("تعذّر تشغيل الصوت", error) }
         }
     }
     func finish(_ occurrence: Occurrence) {
@@ -258,9 +266,21 @@ enum Page: String, CaseIterable, Identifiable {
         else if action.hasPrefix("snooze-"), let minutes = Int(action.dropFirst(7)) { snooze(occurrence, minutes: minutes) }
     }
     private func prepareForSleep() {
+        for item in (overlay.current.map { [$0] } ?? []) + activeQueue where !suspendedOverlays.contains(where: { $0.id == item.id }) {
+            suspendedOverlays.append(item)
+        }
         sounds.stop(); overlay.close(); activeQueue.removeAll(); _ = persist()
     }
+    private func restoreAfterWake() {
+        let remaining = suspendedOverlays; suspendedOverlays.removeAll()
+        for item in remaining where !activeQueue.contains(where: { $0.id == item.id }) {
+            let valid = allReminders.contains { $0.id == item.reminder.id && $0.revision == item.reminder.revision && $0.enabled }
+            if valid && Date().timeIntervalSince(item.date) <= TimeInterval(settings.graceMinutes * 60) { activeQueue.append(item) }
+        }
+    }
     func testReminder() {
+        guard !settings.isPaused(at: Date()) else { notice = "التذكيرات متوقفة مؤقتًا. اضغط استئناف ثم جرّب الموعد."; return }
+        guard settings.overlayEnabled else { notice = "شاشة التنبيه متوقفة. فعّلها من بطاقة حالة التنبيهات أو جرّب المعاينة المباشرة."; return }
         var value = Reminder(title: "لحظة تطمئن فيها", date: Date().addingTimeInterval(10))
         value.detail = "سبحان الله وبحمده"
         value.sound = .dhikr
@@ -269,13 +289,21 @@ enum Page: String, CaseIterable, Identifiable {
         reconcile()
     }
     func testOverlay() {
-        guard !settings.isPaused(at: Date()) else { notice = "استأنف التذكيرات أولًا."; return }
+        guard overlay.current == nil else { return }
         var value = Reminder(title: "لحظة ذكر", date: Date()); value.detail = SpiritualLibrary.shared.dailyVerse()?.text ?? "سبحان الله وبحمده"
-        value.type = .breakTime; value.isTemporary = true
-        let occurrence = Occurrence(reminder: value, date: value.date)
-        activeQueue.append(occurrence); presentNext()
+        value.type = .quran; value.isTemporary = true
+        previewReminder(value)
+    }
+    func previewReminder(_ reminder: Reminder) {
+        guard overlay.current == nil else { return }
+        var value = reminder; value.isTemporary = true; value.overlayDuration = 0
+        let occurrence = Occurrence(reminder: value, date: Date())
+        _ = overlay.show(occurrence, settings: settings,
+            done: { [weak self] in self?.overlay.close(); self?.sounds.stop(); self?.presentNext() },
+            snooze: { [weak self] minutes in self?.snooze(occurrence, minutes: minutes) })
     }
     func testSound() {
+        guard settings.soundEnabled && settings.volume > 0 else { notice = "الصوت متوقف أو مستواه صفر. فعّله من إعدادات الصوت أولًا."; return }
         do { var sample = Reminder(title: "ذكر", date: Date()); sample.sound = .dhikr; try sounds.play(sample, settings: settings) } catch { report("تعذّر تشغيل الصوت", error) }
     }
     func testNotification() { Task { do { try await notifications.test() } catch { report("الإشعارات", error) } } }
@@ -285,10 +313,10 @@ enum Page: String, CaseIterable, Identifiable {
     func openWindow(page: Page? = nil) {
         if let page { self.page = page }
         if mainWindow == nil {
-            let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1160, height: 790),
+            let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1140, height: 780),
                 styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
             window.title = "Master Reminder"; window.titlebarAppearsTransparent = true
-            window.minSize = NSSize(width: 960, height: 700); window.isReleasedWhenClosed = false
+            window.minSize = NSSize(width: 980, height: 700); window.isReleasedWhenClosed = false
             window.setFrameAutosaveName("main-window")
             window.contentView = NSHostingView(rootView: RootView().environmentObject(self))
             window.center(); mainWindow = window
@@ -340,7 +368,7 @@ enum Page: String, CaseIterable, Identifiable {
         } catch { report("تعذّرت إعادة الضبط", error) }
     }
     private func clearRuntime() {
-        overlay.close(); sounds.stop(); temporary.removeAll(); transientLedger.removeAll(); activeQueue.removeAll(); recent.removeAll()
+        overlay.close(); sounds.stop(); temporary.removeAll(); transientLedger.removeAll(); activeQueue.removeAll(); suspendedOverlays.removeAll(); recent.removeAll()
     }
     func quit() {
         prepareForSleep(); isCreating = false; editing = nil
@@ -370,12 +398,22 @@ enum Page: String, CaseIterable, Identifiable {
         func checkpoint(_ label: String) { print("SMOKE: " + label); fflush(stdout) }
         checkpoint("started")
         var results: [String: Bool] = [:]
+        let evidence = storage.url.deletingLastPathComponent()
+        func capture(_ name: String, view: NSView?) {
+            guard let view, let bitmap = view.bitmapImageRepForCachingDisplay(in: view.bounds) else { return }
+            view.cacheDisplay(in: view.bounds, to: bitmap)
+            try? bitmap.representation(using: .png, properties: [:])?.write(to: evidence.appendingPathComponent(name + ".png"))
+        }
         results["mainWindow"] = mainWindow?.isVisible == true
         results["libraryLoaded"] = SpiritualLibrary.shared.entries.count == 6545
         results["resourcesInsideInstalledApp"] = AppResources.bundle.bundleURL.resolvingSymlinksInPath().path.hasPrefix(Bundle.main.bundleURL.resolvingSymlinksInPath().path + "/")
         results["arabicFontRegistered"] = NSFont(name: Brand.arabicName, size: 18) != nil
         results["brandIconPresent"] = AppResources.url("AppIcon", "png").flatMap { NSImage(contentsOf: $0) } != nil
         results["audioSampleDecodes"] = (try? AVAudioPlayer(contentsOf: AppResources.url("dhikr-sample", "mp3")!)) != nil
+        testSound()
+        try? await Task.sleep(nanoseconds: 200_000_000)
+        results["audioPlaybackStarts"] = sounds.isPlaying
+        sounds.stop()
         newReminder(); results["creationWizard"] = isCreating; isCreating = false
         widgets.set(.dhikr, visible: true); results["desktopWidgetCreated"] = widgets.count == 1
         results["widgetPositionRestored"] = await widgets.checkPositionRestorationForSmoke()
@@ -384,19 +422,37 @@ enum Page: String, CaseIterable, Identifiable {
         widgets.setFloating(false)
 
         checkpoint("resources and widgets passed")
+        updateSettings { $0.overlayEnabled = false; $0.pausedUntil = Date().addingTimeInterval(60) }
         testOverlay()
         results["overlayCreated"] = overlay.windowCount > 0
-        if let occurrence = overlay.current { finish(occurrence) }
+        results["previewWorksWhileDisabledAndPaused"] = overlay.visibleWindowCount > 0 && !settings.overlayEnabled && settings.isPaused(at: Date())
+        overlay.simulateEscapeForSmoke()
         results["overlayClosed"] = overlay.windowCount == 0
+        updateSettings { $0.overlayEnabled = true; $0.pausedUntil = nil }
         var reminder = Reminder(title: "Smoke", date: Date().addingTimeInterval(3600))
         saveReminder(reminder); results["create"] = data.reminders.contains { $0.id == reminder.id }
         reminder.title = "Updated"; saveReminder(reminder)
         results["edit"] = data.reminders.first { $0.id == reminder.id }?.title == "Updated"
         results["persistence"] = (try? storage.load().reminders.contains { $0.id == reminder.id }) == true
         reminder = data.reminders.first { $0.id == reminder.id } ?? reminder
-        reminder.date = Date().addingTimeInterval(2); saveReminder(reminder)
-        try? await Task.sleep(nanoseconds: 3_500_000_000)
+        notifications.delayForSmoke = 12_000_000_000
+        reminder.title = "لحظة تطمئن فيها"; reminder.detail = "سبحان الله وبحمده"; reminder.type = .dhikr
+        reminder.date = Date().addingTimeInterval(3); reminder.preAlertMinutes = 0; saveReminder(reminder)
+        mainWindow?.close(); NSApp.hide(nil)
+        NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.finder").first?.activate(options: [.activateIgnoringOtherApps])
+        try? await Task.sleep(nanoseconds: 500_000_000)
+        results["anotherAppWasFrontmost"] = NSWorkspace.shared.frontmostApplication.map { $0.processIdentifier != ProcessInfo.processInfo.processIdentifier } ?? false
+        results["mainWindowClosedBeforeDue"] = mainWindow?.isVisible == false
+        try? await Task.sleep(nanoseconds: 3_000_000_000)
         results["runtimeDueTrigger"] = overlay.current?.reminder.id == reminder.id
+        results["backgroundOverlayVisible"] = overlay.visibleWindowCount > 0
+        results["windowServerConfirmsOnScreen"] = overlay.onScreenWindowCount > 0
+        results["alarmIndependentOfSlowOSService"] = notifications.syncInProgress && overlay.current?.reminder.id == reminder.id
+        overlay.snapshot(to: evidence.appendingPathComponent("overlay.png"))
+        prepareForSleep(); prepareForSleep()
+        results["sleepHidesOverlay"] = overlay.windowCount == 0
+        restoreAfterWake(); reconcile()
+        results["wakeRestoresUnacknowledgedAlert"] = overlay.current?.reminder.id == reminder.id && overlay.visibleWindowCount > 0
         if let occurrence = overlay.current {
             snooze(occurrence, minutes: 5)
             results["runtimeSnooze"] = data.snoozes.contains { $0.parentID == occurrence.id }
@@ -405,6 +461,7 @@ enum Page: String, CaseIterable, Identifiable {
         } else { results["runtimeSnooze"] = false }
         deleteReminder(reminder); results["delete"] = !data.reminders.contains { $0.id == reminder.id }
         results["deleteSnoozeCleanup"] = data.snoozes.isEmpty
+        notifications.delayForSmoke = 0
         checkpoint("CRUD and snooze passed")
         testReminder()
         try? await Task.sleep(nanoseconds: 11_000_000_000)
@@ -412,16 +469,38 @@ enum Page: String, CaseIterable, Identifiable {
         results["temporaryNotPersisted"] = (try? storage.load().reminders.isEmpty) == true
         if let occurrence = overlay.current { finish(occurrence) }
         checkpoint("temporary test passed")
+        pause(minutes: 1)
+        var pausedReminder = Reminder(title: "Paused test", date: Date().addingTimeInterval(1))
+        pausedReminder.preAlertMinutes = 0; saveReminder(pausedReminder)
+        try? await Task.sleep(nanoseconds: 1_700_000_000)
+        results["pauseSuppressesAlert"] = overlay.current == nil
+        resume(); results["resumeDoesNotBurst"] = overlay.current == nil
+        deleteReminder(pausedReminder)
+        var automatic = Reminder(title: "Auto dismiss", date: Date().addingTimeInterval(1))
+        automatic.preAlertMinutes = 0; automatic.overlayDuration = 2; saveReminder(automatic)
+        try? await Task.sleep(nanoseconds: 1_500_000_000)
+        results["autoDismissAlertAppears"] = overlay.current?.reminder.id == automatic.id
+        try? await Task.sleep(nanoseconds: 2_200_000_000)
+        results["autoDismissClosesAlert"] = overlay.current == nil
+        deleteReminder(automatic)
         clearRuntime(); notice = nil
         mainWindow?.close(); results["closeKeepsProcessAlive"] = NSApp.isRunning
         openWindow(); results["reopen"] = mainWindow?.isVisible == true
-        let url = storage.url.deletingLastPathComponent().appendingPathComponent("smoke-results.json")
-        if let view = mainWindow?.contentView, let bitmap = view.bitmapImageRepForCachingDisplay(in: view.bounds) {
-            view.cacheDisplay(in: view.bounds, to: bitmap)
-            try? bitmap.representation(using: .png, properties: [:])?.write(to: url.deletingLastPathComponent().appendingPathComponent("dashboard.png"))
+        let url = evidence.appendingPathComponent("smoke-results.json")
+        for (index, title) in ["أذكار المساء", "ورد القرآن", "استراحة قصيرة"].enumerated() {
+            var sample = Reminder(title: title, date: Date().addingTimeInterval(Double(index + 1) * 3600))
+            sample.type = index == 0 ? .dhikr : (index == 1 ? .quran : .custom)
+            saveReminder(sample)
         }
+        updateSettings { $0.appearance = .light }
+        try? await Task.sleep(nanoseconds: 600_000_000)
+        capture("dashboard", view: mainWindow?.contentView)
+        updateSettings { $0.appearance = .dark }
+        try? await Task.sleep(nanoseconds: 600_000_000)
+        capture("dashboard-dark", view: mainWindow?.contentView)
+        updateSettings { $0.appearance = .light }
         checkpoint("dashboard captured")
-        for (target, name) in [(Page.library, "library"), (.widgets, "widgets"), (.tasbih, "tasbih")] {
+        for (target, name) in [(Page.library, "library"), (.widgets, "widgets"), (.tasbih, "tasbih"), (.reminders, "reminders"), (.settings, "settings")] {
             page = target
             try? await Task.sleep(nanoseconds: 500_000_000)
             if let view = mainWindow?.contentView, let bitmap = view.bitmapImageRepForCachingDisplay(in: view.bounds) {
@@ -442,6 +521,12 @@ enum Page: String, CaseIterable, Identifiable {
         isCreating = false
         try? await Task.sleep(nanoseconds: 900_000_000)
         results["wizardDismissed"] = mainWindow?.attachedSheet == nil
+        newReminder(category: .custom)
+        try? await Task.sleep(nanoseconds: 700_000_000)
+        capture("editor", view: mainWindow?.attachedSheet?.contentView)
+        results["customCategoryOpensEditor"] = creationCategory == .custom && mainWindow?.attachedSheet != nil
+        isCreating = false
+        try? await Task.sleep(nanoseconds: 600_000_000)
         updateSettings { $0.onboardingComplete = true }
         results["completedProfileSavedForRelaunch"] = (try? storage.load().settings.onboardingComplete) == true
         try? JSONSerialization.data(withJSONObject: results, options: [.prettyPrinted, .sortedKeys]).write(to: url)
