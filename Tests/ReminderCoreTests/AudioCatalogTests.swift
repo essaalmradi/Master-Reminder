@@ -72,9 +72,11 @@ final class AudioCatalogTests: XCTestCase {
     }
     func testMuteKeepsSelectionAndEveryTypeOffersCustomAudio() throws {
         var value = try XCTUnwrap(SpiritualLibrary.shared.entry("quran-1-1")).reminder
+        value.audio?.mutedChoice = value.sound
         let selected = value.audio; value.sound = .none
         let restored = try JSONDecoder().decode(Reminder.self, from: JSONEncoder().encode(value))
         XCTAssertEqual(restored.sound, .none); XCTAssertEqual(restored.audio, selected)
+        XCTAssertEqual(restored.audio?.mutedChoice, .quran)
         for type in ReminderType.allCases {
             value.type = type
             XCTAssertTrue(AudioCatalog.choices(for: value).contains(.none))

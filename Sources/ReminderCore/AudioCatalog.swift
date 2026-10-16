@@ -2,6 +2,7 @@ import Foundation
 
 public struct ReminderAudio: Codable, Equatable {
     public var recordingID: String? = nil
+    public var mutedChoice: SoundChoice? = nil
     public var libraryEntryID: String? = nil
     public var reciterID: String? = nil
     public var voiceIdentifier: String? = nil

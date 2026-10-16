@@ -24,7 +24,7 @@ struct ReminderAudioView: View {
         Group {
             Toggle("تشغيل صوت مع التذكير", isOn: Binding(get: { reminder.sound != .none }, set: { enabled in
                 if enabled { reminder.sound = previous == .none ? AudioCatalog.suggestedSound(for: reminder) : previous; configure() }
-                else { previous = reminder.sound; reminder.sound = .none }
+                else { previous = reminder.sound; var next = audio; next.mutedChoice = reminder.sound; reminder.audio = next; reminder.sound = .none }
             })).toggleStyle(.switch).accessibilityIdentifier("audio.enabled")
             if reminder.sound == .none {
                 Text("سيظهر النص بدون صوت.").font(Brand.font(13)).foregroundStyle(.secondary)
@@ -83,7 +83,7 @@ struct ReminderAudioView: View {
                 else { Text(message ?? (model.sounds.isPrepared(reminder) ? "جاهز على جهازك." : "يُنزل الصوت عند المعاينة أو الحفظ، ثم يعمل بدون إنترنت.")).font(Brand.font(12)).foregroundStyle(.secondary) }
                 if let recording = try? AudioCatalog.recording(for: reminder) { Link("مصدر التسجيل", destination: recording.sourceURL).font(Brand.font(12)) }
             }
-        }.onAppear { previous = reminder.sound; configure() }
+        }.onAppear { previous = audio.mutedChoice ?? reminder.sound; configure() }
         .onChange(of: reminder.sound) { _ in stopPreview(); configure() }
         .onChange(of: reminder.audio) { _ in stopPreview() }
         .onDisappear { stopPreview() }

@@ -465,6 +465,7 @@ enum Page: String, CaseIterable, Identifiable {
         reminder = data.reminders.first { $0.id == reminder.id } ?? reminder
         notifications.delayForSmoke = 12_000_000_000
         reminder.title = "لحظة تطمئن فيها"; reminder.detail = "سبحان الله وبحمده"; reminder.type = .dhikr
+        reminder.title = SpiritualLibrary.shared.entry("quran-1-1")!.title; reminder.detail = SpiritualLibrary.shared.entry("quran-1-1")!.text; reminder.type = .quran
         reminder.sound = .quran; reminder.audio = ReminderAudio(); reminder.audio?.libraryEntryID = "quran-1-1"; reminder.audio?.reciterID = "husary"
         reminder.date = Date().addingTimeInterval(3); reminder.preAlertMinutes = 0; saveReminder(reminder)
         mainWindow?.close(); NSApp.hide(nil)
