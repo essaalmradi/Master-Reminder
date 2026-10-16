@@ -56,7 +56,7 @@ struct RootView: View {
             Spacer(minLength: 12)
             VStack(alignment: .leading, spacing: 10) {
                 Label(model.settings.isPaused(at: Date()) ? "متوقف مؤقتًا" : "معك في الخلفية", systemImage: "circle.fill").font(Brand.font(12)).foregroundStyle(Brand.muted(scheme))
-                Text("0.2.0 · محفوظ على جهازك").font(Brand.font(12)).foregroundStyle(Brand.muted(scheme))
+                Text("\(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "—") · محفوظ على جهازك").font(Brand.font(12)).foregroundStyle(Brand.muted(scheme))
             }
         }.padding(20).background(Brand.panel(scheme))
     }

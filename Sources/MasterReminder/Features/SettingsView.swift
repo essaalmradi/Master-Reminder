@@ -59,7 +59,7 @@ struct SettingsView: View {
                     Text("بياناتك محفوظة محليًا. لا حسابات، لا مزامنة سحابية، ولا تقويم متصل في هذا الإصدار.").font(Brand.font(14)).foregroundStyle(.secondary)
                 }
                 Section("Master Reminder") {
-                    LabeledContent("الإصدار", value: "0.2.0 (2)")
+                    LabeledContent("الإصدار", value: "\(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "—") (\(Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "—"))")
                     Text("صُنع لتتوقف في الوقت المناسب.").foregroundStyle(.secondary)
                 }
             }.formStyle(.grouped)

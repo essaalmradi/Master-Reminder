@@ -47,6 +47,7 @@ enum Page: String, CaseIterable, Identifiable {
     private var activeQueue: [Occurrence] = []
     private var recent: [String: Occurrence] = [:]
     var isSmoke: Bool { ProcessInfo.processInfo.arguments.contains("--smoke-test") }
+    private var isLaunchCheck: Bool { ProcessInfo.processInfo.arguments.contains("--launch-check") }
     var settings: AppSettings { data.settings }
     var allReminders: [Reminder] { data.reminders + prayerProvider.reminders(entries: data.prayers, settings: settings) + temporary }
     var ledger: [String: EventRecord] { data.ledger.merging(transientLedger) { _, new in new } }
@@ -54,7 +55,7 @@ enum Page: String, CaseIterable, Identifiable {
     private init() {
         let fm = FileManager.default
         let base: URL
-        if ProcessInfo.processInfo.arguments.contains("--smoke-test") {
+        if ProcessInfo.processInfo.arguments.contains("--smoke-test") || ProcessInfo.processInfo.arguments.contains("--launch-check") {
             base = fm.temporaryDirectory.appendingPathComponent("MasterReminder-Smoke")
         } else {
             base = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("MasterReminder")
@@ -65,7 +66,7 @@ enum Page: String, CaseIterable, Identifiable {
         catch { canPersist = false; self.error = "تعذّر قراءة البيانات. لم نغيّر الملف الأصلي. يمكنك استيراد نسخة سليمة أو إعادة ضبط البيانات. " + error.localizedDescription; Log.storage.error("Storage load failed; writes blocked") }
     }
 
-    func start() {
+    func start(isBackgroundLaunch: Bool = false) {
         guard !started else { return }; started = true
         Brand.registerFonts()
         widgets.restore(model: self)
@@ -76,8 +77,11 @@ enum Page: String, CaseIterable, Identifiable {
         timer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in Task { @MainActor in self?.reconcile() } }
         if let timer { RunLoop.main.add(timer, forMode: .common) }
         reconcile()
-        if !settings.onboardingComplete || isSmoke { openWindow() }
+        // A manual launch must show the UI even after onboarding or an app update.
+        // Only macOS login/service launches may remain in the menu bar.
+        if !isBackgroundLaunch || !settings.onboardingComplete { openWindow() }
         if isSmoke { Task { await runSmokeTest() } }
+        else if isLaunchCheck { Task { await runLaunchCheck() } }
         Log.app.info("Application started")
     }
 
@@ -289,7 +293,10 @@ enum Page: String, CaseIterable, Identifiable {
             window.contentView = NSHostingView(rootView: RootView().environmentObject(self))
             window.center(); mainWindow = window
         }
-        NSApp.activate(ignoringOtherApps: true); mainWindow?.makeKeyAndOrderFront(nil)
+        NSApp.unhide(nil)
+        if mainWindow?.isMiniaturized == true { mainWindow?.deminiaturize(nil) }
+        mainWindow?.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
         reconcile()
     }
     func exportData() {
@@ -339,6 +346,22 @@ enum Page: String, CaseIterable, Identifiable {
         prepareForSleep(); isCreating = false; editing = nil
         if let sheet = mainWindow?.attachedSheet { mainWindow?.endSheet(sheet); sheet.orderOut(nil) }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { NSApp.terminate(nil) }
+    }
+
+    private func runLaunchCheck() async {
+        // A second real Launch Services launch, with the previously saved profile.
+        // This diagnostic flag changes storage/reporting only, never window visibility.
+        try? await Task.sleep(nanoseconds: 1_500_000_000)
+        var results = ["existingProfileLoaded": settings.onboardingComplete,
+                       "manualLaunchShowsWindow": mainWindow?.isVisible == true]
+        mainWindow?.miniaturize(nil)
+        try? await Task.sleep(nanoseconds: 400_000_000)
+        openWindow()
+        try? await Task.sleep(nanoseconds: 400_000_000)
+        results["reopenRestoresMinimizedWindow"] = mainWindow?.isVisible == true && mainWindow?.isMiniaturized == false
+        let url = storage.url.deletingLastPathComponent().appendingPathComponent("launch-check.json")
+        try? JSONSerialization.data(withJSONObject: results, options: [.prettyPrinted, .sortedKeys]).write(to: url)
+        quit()
     }
 
     private func runSmokeTest() async {
@@ -418,6 +441,8 @@ enum Page: String, CaseIterable, Identifiable {
         isCreating = false
         try? await Task.sleep(nanoseconds: 900_000_000)
         results["wizardDismissed"] = mainWindow?.attachedSheet == nil
+        updateSettings { $0.onboardingComplete = true }
+        results["completedProfileSavedForRelaunch"] = (try? storage.load().settings.onboardingComplete) == true
         try? JSONSerialization.data(withJSONObject: results, options: [.prettyPrinted, .sortedKeys]).write(to: url)
         Log.app.info("Runtime smoke completed")
         checkpoint("complete")

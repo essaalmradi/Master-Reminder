@@ -23,3 +23,22 @@ shutil.copy(source, 'dist/smoke-results.json')
 for preview in source.parent.glob('*.png'):
     shutil.copy(preview, pathlib.Path('dist') / preview.name)
 PY
+
+# Reproduce the reported launch failure with an existing, completed profile.
+# Unlike --smoke-test, --launch-check cannot force a window open.
+LAUNCH_REPORT="$(python3 -c 'import pathlib,tempfile; print(pathlib.Path(tempfile.gettempdir()) / "MasterReminder-Smoke" / "launch-check.json")')"
+rm -f "$LAUNCH_REPORT"
+open -n "$PWD/dist/Master Reminder.app" --args --launch-check
+for attempt in $(seq 1 20); do
+  if [ -f "$LAUNCH_REPORT" ]; then break; fi
+  sleep 1
+done
+python3 - "$LAUNCH_REPORT" <<'PY'
+import json, pathlib, shutil, sys
+source = pathlib.Path(sys.argv[1])
+assert source.exists(), 'App did not report after Launch Services launch'
+results = json.loads(source.read_text())
+print(json.dumps(results, indent=2))
+assert results and all(results.values()), 'Existing-user launch regression'
+shutil.copy(source, 'dist/launch-check.json')
+PY

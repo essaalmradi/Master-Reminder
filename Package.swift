@@ -12,6 +12,7 @@ let package = Package(
         .target(name: "ReminderDesign", dependencies: ["ReminderCore"]),
         .executableTarget(name: "MasterReminder", dependencies: ["ReminderCore", "ReminderDesign"],
                           resources: [.copy("Resources/PrivacyInfo.xcprivacy")]),
-        .testTarget(name: "ReminderCoreTests", dependencies: ["ReminderCore"])
+        .testTarget(name: "ReminderCoreTests", dependencies: ["ReminderCore"]),
+        .testTarget(name: "MasterReminderTests", dependencies: ["MasterReminder"])
     ]
 )
