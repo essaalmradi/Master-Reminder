@@ -8,7 +8,7 @@ permissions:
   contents: read
 concurrency:
   group: ios-personal-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 jobs:
   build:
     runs-on: macos-26
@@ -45,6 +45,7 @@ jobs:
         run: |
           set -o pipefail
           xcodebuild -project iOS/MasterReminderPhone.xcodeproj -scheme MasterReminderPhone -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath build-ios CODE_SIGNING_ALLOWED=NO build 2>&1 | tee dist-ios/device-build.log
+          python3 scripts/ios-verify-version.py build-ios/Build/Products/Release-iphoneos/MasterReminderPhone.app
           ditto -c -k --keepParent build-ios/Build/Products/Release-iphoneos/MasterReminderPhone.app "dist-ios/Master-Reminder-$APP_VERSION-iPhone-UNSIGNED.app.zip"
       - name: Test audio conversion and interface on iPhone simulator
         run: |
