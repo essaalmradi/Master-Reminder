@@ -64,8 +64,11 @@ jobs:
           xcrun simctl boot "$SIM_ID" || true
           xcrun simctl bootstatus "$SIM_ID" -b
           xcodebuild -project iOS/MasterReminderPhone.xcodeproj -scheme MasterReminderPhone -destination "platform=iOS Simulator,id=$SIM_ID" -derivedDataPath build-ios-sim -resultBundlePath dist-ios/PhoneTests.xcresult -parallel-testing-enabled NO CODE_SIGNING_ALLOWED=NO test 2>&1 | tee dist-ios/simulator-tests.log
-          xcrun simctl io "$SIM_ID" screenshot dist-ios/iPhone-home.png
-          xcrun xcresulttool export attachments --path dist-ios/PhoneTests.xcresult --output-path dist-ios/screenshots
+      - name: Export simulator screenshots, including failures
+        if: always()
+        run: |
+          if [ -n "$SIM_ID" ]; then xcrun simctl io "$SIM_ID" screenshot dist-ios/iPhone-home.png || true; fi
+          if [ -d dist-ios/PhoneTests.xcresult ]; then xcrun xcresulttool export attachments --path dist-ios/PhoneTests.xcresult --output-path dist-ios/screenshots; fi
       - name: Archive and export personal Ad Hoc IPA
         if: steps.signing.outputs.ready == 'true'
         run: |

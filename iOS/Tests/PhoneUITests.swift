@@ -10,9 +10,22 @@ final class PhoneUITests: XCTestCase {
         XCTAssertTrue(sound.waitForExistence(timeout: 5)); sound.tap()
         XCTAssertTrue(app.buttons["audio.muezzin"].waitForExistence(timeout: 5))
         let screenshot = XCTAttachment(screenshot: app.screenshot()); screenshot.name = "iPhone-sound-picker"; screenshot.lifetime = .keepAlways; add(screenshot)
-        let toggle = app.switches["audio.enabled"]; XCTAssertTrue(toggle.exists); toggle.tap()
-        XCTAssertFalse(app.buttons["audio.muezzin"].exists)
-        toggle.tap(); XCTAssertTrue(app.buttons["audio.muezzin"].waitForExistence(timeout: 5))
+        let row = app.switches["audio.enabled"]
+        XCTAssertTrue(row.exists)
+        // SwiftUI exposes the labelled Form row and its native UISwitch separately.
+        // Tapping the row centre hits its label; target the actual switch control.
+        let toggle = row.switches.firstMatch.exists ? row.switches.firstMatch : row
+        XCTAssertEqual(toggle.value as? String, "1")
+        toggle.tap()
+        let off = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == '0'"), object: toggle)
+        XCTAssertEqual(XCTWaiter.wait(for: [off], timeout: 5), .completed)
+        let hidden = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: app.buttons["audio.muezzin"])
+        XCTAssertEqual(XCTWaiter.wait(for: [hidden], timeout: 5), .completed)
+        let muted = XCTAttachment(screenshot: app.screenshot()); muted.name = "iPhone-silent-reminder"; muted.lifetime = .keepAlways; add(muted)
+        toggle.tap()
+        let on = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == '1'"), object: toggle)
+        XCTAssertEqual(XCTWaiter.wait(for: [on], timeout: 5), .completed)
+        XCTAssertTrue(app.buttons["audio.muezzin"].waitForExistence(timeout: 5))
     }
     @MainActor func testGuidedCreationPersistsAcrossLaunch() throws {
         let app = XCUIApplication(); app.launchArguments = ["--ui-testing", "--reset-test-data"]; app.launch()
