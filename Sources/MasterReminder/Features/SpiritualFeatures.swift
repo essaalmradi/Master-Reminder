@@ -92,7 +92,7 @@ struct WidgetGallery: View {
                 LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 22) {
                     ForEach(SpiritualWidgetKind.allCases) { kind in
                         VStack(alignment: .leading, spacing: 14) {
-                            SpiritualWidgetView(kind: kind, nextTitle: model.upcoming.first?.reminder.title, nextDate: model.upcoming.first?.date, compact: kind.isWide).frame(height: 220)
+                            SpiritualWidgetView(kind: kind, nextTitle: model.upcoming.first?.reminder.title, nextDate: model.upcoming.first?.date, compact: true).frame(height: 220)
                             Toggle(kind.title, isOn: Binding(get: { widgets.enabled.contains(kind) }, set: { widgets.set(kind, visible: $0) })).toggleStyle(.switch).font(Brand.font(17))
                         }
                     }

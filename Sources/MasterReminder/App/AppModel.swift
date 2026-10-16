@@ -403,6 +403,11 @@ enum Page: String, CaseIterable, Identifiable {
             guard let view, let bitmap = view.bitmapImageRepForCachingDisplay(in: view.bounds) else { return }
             view.cacheDisplay(in: view.bounds, to: bitmap)
             try? bitmap.representation(using: .png, properties: [:])?.write(to: evidence.appendingPathComponent(name + ".png"))
+            if let window = view.window {
+                let capture = Process(); capture.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
+                capture.arguments = ["-x", "-o", "-l", String(window.windowNumber), evidence.appendingPathComponent(name + "-screen.png").path]
+                do { try capture.run(); capture.waitUntilExit() } catch { Log.app.debug("Native screenshot unavailable") }
+            }
         }
         results["mainWindow"] = mainWindow?.isVisible == true
         results["libraryLoaded"] = SpiritualLibrary.shared.entries.count == 6545
@@ -503,18 +508,14 @@ enum Page: String, CaseIterable, Identifiable {
         for (target, name) in [(Page.library, "library"), (.widgets, "widgets"), (.tasbih, "tasbih"), (.reminders, "reminders"), (.settings, "settings")] {
             page = target
             try? await Task.sleep(nanoseconds: 500_000_000)
-            if let view = mainWindow?.contentView, let bitmap = view.bitmapImageRepForCachingDisplay(in: view.bounds) {
-                view.cacheDisplay(in: view.bounds, to: bitmap)
-                try? bitmap.representation(using: .png, properties: [:])?.write(to: url.deletingLastPathComponent().appendingPathComponent(name + ".png"))
-            }
+            capture(name, view: mainWindow?.contentView)
         }
         checkpoint("pages captured; opening wizard")
         page = .dashboard; newReminder()
         try? await Task.sleep(nanoseconds: 600_000_000)
         checkpoint("wizard opened; capturing")
-        if let view = mainWindow?.attachedSheet?.contentView, let bitmap = view.bitmapImageRepForCachingDisplay(in: view.bounds) {
-            view.cacheDisplay(in: view.bounds, to: bitmap)
-            try? bitmap.representation(using: .png, properties: [:])?.write(to: url.deletingLastPathComponent().appendingPathComponent("creation.png"))
+        if let view = mainWindow?.attachedSheet?.contentView {
+            capture("creation", view: view)
             results["wizardSheetRendered"] = true
         } else { results["wizardSheetRendered"] = false }
         checkpoint("wizard captured; dismissing")

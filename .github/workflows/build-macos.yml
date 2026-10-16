@@ -50,7 +50,7 @@ jobs:
         run: |
           python3 - <<'PY'
           import json, os, pathlib
-          info = {'version': '0.3.0', 'build': 5, 'sha': os.environ['GITHUB_SHA'],
+          info = {'version': '0.3.0', 'build': 6, 'sha': os.environ['GITHUB_SHA'],
                   'run_id': os.environ['GITHUB_RUN_ID'], 'team_id': 'KTA6FSZK9V',
                   'architecture': 'arm64', 'notarized': False,
                   'codesign_verified': True, 'minimum_macos': '13.0'}

@@ -79,13 +79,14 @@ struct DashboardView: View {
         }
     }
     private var dailyVerse: some View {
-        VStack(alignment: .leading, spacing: 18) {
+        VStack(alignment: .leading, spacing: 12) {
             HStack { Image(systemName: "quote.opening").font(.system(size: 20, weight: .light)); Spacer(); Text("آية اليوم").font(Brand.font(12)) }.foregroundStyle(Brand.accent(scheme).opacity(0.75))
-            Text(SpiritualLibrary.shared.dailyVerse()?.text ?? "").font(Brand.font(21)).lineSpacing(8).frame(maxWidth: .infinity, alignment: .leading)
+            Text(SpiritualLibrary.shared.dailyVerse()?.text ?? "").font(Brand.font(20)).lineSpacing(6)
+                .fixedSize(horizontal: false, vertical: true).frame(maxWidth: .infinity, alignment: .leading)
             Spacer(minLength: 0)
             Text(SpiritualLibrary.shared.dailyVerse()?.reference ?? "").font(Brand.font(10)).foregroundStyle(.secondary).lineLimit(2)
             Button("تأمّل في المكتبة") { model.page = .library }.font(Brand.font(12)).buttonStyle(.plain).foregroundStyle(Brand.accent(scheme))
-        }.padding(24).frame(height: 230).frame(maxWidth: .infinity)
+        }.padding(22).frame(minHeight: 230).frame(maxWidth: .infinity)
             .background(Brand.sky.opacity(scheme == .dark ? 0.08 : 0.055), in: RoundedRectangle(cornerRadius: 20))
     }
     private func quickAction(_ title: String, symbol: String, action: @escaping () -> Void) -> some View {

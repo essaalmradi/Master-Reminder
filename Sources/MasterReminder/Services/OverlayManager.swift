@@ -79,6 +79,11 @@ private final class ReminderPanel: NSPanel {
         guard let view = windows.first?.contentView, let bitmap = view.bitmapImageRepForCachingDisplay(in: view.bounds) else { return }
         view.cacheDisplay(in: view.bounds, to: bitmap)
         try? bitmap.representation(using: .png, properties: [:])?.write(to: url)
+        if let window = windows.first {
+            let capture = Process(); capture.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
+            capture.arguments = ["-x", "-o", "-l", String(window.windowNumber), url.deletingLastPathComponent().appendingPathComponent("overlay-screen.png").path]
+            do { try capture.run(); capture.waitUntilExit() } catch { Log.app.debug("Native screenshot unavailable") }
+        }
     }
     func simulateEscapeForSmoke() {
         guard let window = windows.first,
@@ -115,7 +120,9 @@ private struct OverlayView: View {
                 Image(systemName: occurrence.reminder.type.symbol).font(.system(size: 32, weight: .light)).foregroundStyle(Brand.ice)
                 Text(occurrence.reminder.title).font(Brand.font(30)).multilineTextAlignment(.center)
                 if !occurrence.reminder.detail.isEmpty {
-                    ScrollView { Text(occurrence.reminder.detail).font(Brand.font(25)).lineSpacing(10).multilineTextAlignment(.center).frame(maxWidth: .infinity) }.frame(maxHeight: 280)
+                    if occurrence.reminder.detail.count > 240 {
+                        ScrollView { detailText }.frame(height: 240)
+                    } else { detailText.fixedSize(horizontal: false, vertical: true) }
                 }
                 HStack(spacing: 12) {
                     Button("تم", action: done).buttonStyle(BrandButton()).keyboardShortcut(.defaultAction).accessibilityIdentifier("reminder.done")
@@ -130,5 +137,8 @@ private struct OverlayView: View {
                 .overlay(RoundedRectangle(cornerRadius: 28).stroke(.white.opacity(0.14), lineWidth: 1))
                 .shadow(color: .black.opacity(0.25), radius: 40, y: 16)
         }.font(Brand.font(16)).foregroundStyle(.white).preferredColorScheme(.dark)
+    }
+    private var detailText: some View {
+        Text(occurrence.reminder.detail).font(Brand.font(25)).lineSpacing(10).multilineTextAlignment(.center).frame(maxWidth: .infinity)
     }
 }

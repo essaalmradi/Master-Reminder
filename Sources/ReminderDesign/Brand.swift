@@ -81,7 +81,7 @@ public struct CategoryTile: View {
                 Image(systemName: category.type.symbol).font(.system(size: 23, weight: .light)).foregroundStyle(Brand.accent(scheme)).padding(.bottom, 8)
                 Text(category.title).font(Brand.font(19)).foregroundStyle(Brand.ink(scheme))
                 Text(category.subtitle).font(Brand.font(13)).foregroundStyle(Brand.muted(scheme)).lineLimit(2)
-            }.frame(maxWidth: .infinity, minHeight: 112, alignment: .leading).padding(20)
+            }.frame(maxWidth: .infinity, minHeight: 92, alignment: .leading).padding(16)
                 .background(Brand.panel(scheme).opacity(0.8), in: RoundedRectangle(cornerRadius: 18))
                 .overlay(RoundedRectangle(cornerRadius: 18).stroke(Brand.line(scheme).opacity(0.65), lineWidth: 0.7))
                 .contentShape(RoundedRectangle(cornerRadius: 18))
