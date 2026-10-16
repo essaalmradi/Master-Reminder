@@ -12,22 +12,41 @@ concurrency:
 jobs:
   build:
     runs-on: macos-26
-    timeout-minutes: 35
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
-      - name: Prepare Xcode project
+      - name: Prepare Xcode project and version
         run: |
           mkdir -p dist-ios
           xcodebuild -version
           brew install xcodegen
           swift scripts/ios-icon.swift
           xcodegen generate --spec iOS/project.yml
-      - name: Build for iPhone without distribution signing
+          python3 - <<'PY'
+          import json, os, re
+          from pathlib import Path
+          spec=Path('iOS/project.yml').read_text()
+          version=re.search(r'MARKETING_VERSION: (\S+)', spec)[1]
+          build=re.search(r'CURRENT_PROJECT_VERSION: (\d+)', spec)[1]
+          with open(os.environ['GITHUB_ENV'],'a') as f: f.write(f'APP_VERSION={version}\nAPP_BUILD={build}\n')
+          Path('dist-ios/build-info.json').write_text(json.dumps({'version':version,'build':build,'sha':os.environ['GITHUB_SHA']},indent=2))
+          Path('dist-ios/INSTALLATION-STATUS.txt').write_text('UNSIGNED until Ad Hoc signing and IPA verification complete. Not installable on a physical iPhone.\nSimulator tests do not verify physical AlarmKit ringing, authorization, Silent/Focus behavior or widget delivery.\n')
+          PY
+      - name: Validate distribution certificate and Ad Hoc profiles
+        id: signing
+        env:
+          IOS_CERTIFICATE_P12: ${{ secrets.IOS_CERTIFICATE_P12 }}
+          IOS_CERTIFICATE_PASSWORD: ${{ secrets.IOS_CERTIFICATE_PASSWORD }}
+          IOS_APP_PROVISIONING_PROFILE: ${{ secrets.IOS_APP_PROVISIONING_PROFILE }}
+          IOS_WIDGET_PROVISIONING_PROFILE: ${{ secrets.IOS_WIDGET_PROVISIONING_PROFILE }}
+          IOS_DEVICE_UDID: ${{ secrets.IOS_DEVICE_UDID }}
+        run: python3 scripts/ios-signing.py
+      - name: Build current iPhone device app
         run: |
           set -o pipefail
           xcodebuild -project iOS/MasterReminderPhone.xcodeproj -scheme MasterReminderPhone -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath build-ios CODE_SIGNING_ALLOWED=NO build 2>&1 | tee dist-ios/device-build.log
-          ditto -c -k --keepParent build-ios/Build/Products/Release-iphoneos/MasterReminderPhone.app dist-ios/Master-Reminder-0.2.0-iPhone-UNSIGNED.app.zip
-      - name: Test on iPhone simulator
+          ditto -c -k --keepParent build-ios/Build/Products/Release-iphoneos/MasterReminderPhone.app "dist-ios/Master-Reminder-$APP_VERSION-iPhone-UNSIGNED.app.zip"
+      - name: Test audio conversion and interface on iPhone simulator
         run: |
           set -o pipefail
           xcrun simctl list devices available -j > dist-ios/simulators.json
@@ -44,16 +63,26 @@ jobs:
           SIM_ID="$(cat dist-ios/sim-id.txt)"
           xcrun simctl boot "$SIM_ID" || true
           xcrun simctl bootstatus "$SIM_ID" -b
-          xcodebuild -project iOS/MasterReminderPhone.xcodeproj -scheme MasterReminderPhone -destination "platform=iOS Simulator,id=$SIM_ID" -derivedDataPath build-ios-sim -resultBundlePath dist-ios/PhoneUITests.xcresult CODE_SIGNING_ALLOWED=NO test 2>&1 | tee dist-ios/simulator-tests.log
+          xcodebuild -project iOS/MasterReminderPhone.xcodeproj -scheme MasterReminderPhone -destination "platform=iOS Simulator,id=$SIM_ID" -derivedDataPath build-ios-sim -resultBundlePath dist-ios/PhoneTests.xcresult -parallel-testing-enabled NO CODE_SIGNING_ALLOWED=NO test 2>&1 | tee dist-ios/simulator-tests.log
           xcrun simctl io "$SIM_ID" screenshot dist-ios/iPhone-home.png
-          xcrun xcresulttool export attachments --path dist-ios/PhoneUITests.xcresult --output-path dist-ios/screenshots || true
-      - name: Explain signing status
+          xcrun xcresulttool export attachments --path dist-ios/PhoneTests.xcresult --output-path dist-ios/screenshots
+      - name: Archive and export personal Ad Hoc IPA
+        if: steps.signing.outputs.ready == 'true'
         run: |
-          echo 'UNSIGNED build: not installable on a physical iPhone. Requires registered device + Apple Distribution P12 + app and widget Ad Hoc profiles.' > dist-ios/INSTALLATION-STATUS.txt
-          echo 'Simulator UI tests do not verify real-device AlarmKit authorization, ringing, Focus/Silent behavior or widget delivery.' >> dist-ios/INSTALLATION-STATUS.txt
+          set -o pipefail
+          xcodebuild -project iOS/MasterReminderPhone.xcodeproj -scheme MasterReminderPhone -configuration Release -destination 'generic/platform=iOS' -archivePath "$RUNNER_TEMP/MasterReminderPhone.xcarchive" "IOS_APP_PROFILE_UUID=$IOS_APP_PROFILE_UUID" "IOS_WIDGET_PROFILE_UUID=$IOS_WIDGET_PROFILE_UUID" 'CODE_SIGN_IDENTITY=Apple Distribution' archive 2>&1 | tee dist-ios/signed-build.log
+          xcodebuild -exportArchive -archivePath "$RUNNER_TEMP/MasterReminderPhone.xcarchive" -exportPath "$RUNNER_TEMP/master-reminder-ios-export" -exportOptionsPlist "$IOS_SIGNING_DIRECTORY/ExportOptions.plist" 2>&1 | tee dist-ios/export.log
+          cp "$RUNNER_TEMP/master-reminder-ios-export/MasterReminderPhone.ipa" "dist-ios/Master-Reminder-$APP_VERSION-iPhone.ipa"
+          python3 scripts/ios-verify-ipa.py
+          rm -f "dist-ios/Master-Reminder-$APP_VERSION-iPhone-UNSIGNED.app.zip"
+      - name: Remove temporary signing material
+        if: always()
+        run: |
+          security delete-keychain "$RUNNER_TEMP/master-reminder-ios-signing/build.keychain-db" || true
+          rm -rf "$RUNNER_TEMP/master-reminder-ios-signing"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Master-Reminder-0.2.0-iPhone-build-evidence
+          name: Master-Reminder-${{ env.APP_VERSION }}-iPhone-build-evidence
           path: dist-ios/
           retention-days: 30

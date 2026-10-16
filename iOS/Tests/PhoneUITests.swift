@@ -1,8 +1,21 @@
 import XCTest
 
 final class PhoneUITests: XCTestCase {
+    @MainActor func testPrayerHasMuezzinAndCanBeMuted() throws {
+        let app = XCUIApplication(); app.launchArguments = ["--ui-testing", "--reset-test-data"]; app.launch()
+        XCTAssertTrue(app.buttons["new-reminder"].waitForExistence(timeout: 15)); app.buttons["new-reminder"].tap()
+        XCTAssertTrue(app.buttons["category-prayer"].waitForExistence(timeout: 5)); app.buttons["category-prayer"].tap()
+        let sound = app.buttons["audio.settings"]
+        for _ in 0..<4 where !sound.isHittable { app.swipeUp() }
+        XCTAssertTrue(sound.waitForExistence(timeout: 5)); sound.tap()
+        XCTAssertTrue(app.buttons["audio.muezzin"].waitForExistence(timeout: 5))
+        let screenshot = XCTAttachment(screenshot: app.screenshot()); screenshot.name = "iPhone-sound-picker"; screenshot.lifetime = .keepAlways; add(screenshot)
+        let toggle = app.switches["audio.enabled"]; XCTAssertTrue(toggle.exists); toggle.tap()
+        XCTAssertFalse(app.buttons["audio.muezzin"].exists)
+        toggle.tap(); XCTAssertTrue(app.buttons["audio.muezzin"].waitForExistence(timeout: 5))
+    }
     @MainActor func testGuidedCreationPersistsAcrossLaunch() throws {
-        let app = XCUIApplication(); app.launchArguments = ["--ui-testing"]; app.launch()
+        let app = XCUIApplication(); app.launchArguments = ["--ui-testing", "--reset-test-data"]; app.launch()
         XCTAssertTrue(app.buttons["new-reminder"].waitForExistence(timeout: 15))
         let home = XCTAttachment(screenshot: app.screenshot()); home.name = "iPhone-home"; home.lifetime = .keepAlways; add(home)
         app.buttons["new-reminder"].tap()
@@ -13,9 +26,9 @@ final class PhoneUITests: XCTestCase {
         XCTAssertTrue(title.waitForExistence(timeout: 5)); title.tap(); title.typeText("اختبار الهاتف")
         app.swipeUp()
         let save = app.buttons["save-reminder"]
-        XCTAssertTrue(save.waitForExistence(timeout: 5)); save.tap()
+        XCTAssertTrue(save.waitForExistence(timeout: 5)); for _ in 0..<4 where !save.isHittable { app.swipeUp() }; save.tap()
         XCTAssertTrue(app.buttons["new-reminder"].waitForExistence(timeout: 5))
-        app.terminate(); app.launch()
+        app.terminate(); app.launchArguments = ["--ui-testing"]; app.launch()
         XCTAssertTrue(app.staticTexts["اختبار الهاتف"].waitForExistence(timeout: 10))
         // Alarm authorization and ringing are deliberately excluded from simulator UI tests.
     }

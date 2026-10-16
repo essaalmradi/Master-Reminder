@@ -35,7 +35,7 @@ struct PhoneRoot: View {
             NavigationStack { PhoneHome() }.tabItem { Label("اليوم", systemImage: "square.grid.2x2") }.tag(0)
             NavigationStack { PhoneReminders() }.tabItem { Label("التذكيرات", systemImage: "bell") }.tag(1)
             NavigationStack {
-                LibraryBrowser { model.editing = $0.reminder }.padding(18).navigationTitle("المكتبة")
+                LibraryBrowser { model.editing = PhoneModel.libraryReminder($0) }.padding(18).navigationTitle("المكتبة")
                     
             }.tabItem { Label("المكتبة", systemImage: "books.vertical") }.tag(2)
             NavigationStack { TasbihView().navigationTitle("التسبيح") }.tabItem { Label("التسبيح", systemImage: "circle.dotted") }.tag(3)
@@ -87,7 +87,7 @@ struct PhoneReminders: View {
                 Button { model.editing = reminder } label: {
                     HStack(spacing: 14) {
                         Image(systemName: reminder.type.symbol).foregroundStyle(Brand.ocean)
-                        VStack(alignment: .leading, spacing: 6) { Text(reminder.title).font(Brand.font(19)); Text(reminder.repeatRule.title).font(Brand.font(14)).foregroundStyle(.secondary) }
+                        VStack(alignment: .leading, spacing: 6) { Text(reminder.title).font(Brand.font(19)); Text(reminder.repeatRule.title + " · " + AudioCatalog.summary(reminder)).font(Brand.font(14)).foregroundStyle(.secondary).lineLimit(2) }
                         Spacer(); Text(reminder.date, style: .time).font(Brand.number(17))
                     }.opacity(reminder.enabled ? 1 : 0.5).padding(.vertical, 8)
                 }.buttonStyle(.plain).swipeActions { Button("حذف", role: .destructive) { deleting = reminder } }
@@ -107,7 +107,7 @@ struct PhoneWizard: View {
             Group {
                 if let editing { PhoneEditor(reminder: editing) }
                 else if let category {
-                    LibraryBrowser(category: category) { editing = $0.reminder }.padding(18).navigationTitle(category.title)
+                    LibraryBrowser(category: category) { editing = PhoneModel.libraryReminder($0) }.padding(18).navigationTitle(category.title)
                         .toolbar { ToolbarItem(placement: .topBarLeading) { Button("رجوع") { self.category = nil } } }
                 } else {
                     ScrollView {
@@ -117,7 +117,7 @@ struct PhoneWizard: View {
                             LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
                                 ForEach(SpiritualCategory.allCases) { item in
                                     CategoryTile(item) {
-                                        if item == .custom || item == .prayer { var r = Reminder(title: item == .prayer ? "موعد الصلاة" : "", date: Date().addingTimeInterval(3600)); r.type = item.type; r.preAlertMinutes = 0; editing = r }
+                                        if item == .custom || item == .prayer { var r = Reminder(title: item == .prayer ? "موعد الصلاة" : "", date: Date().addingTimeInterval(3600)); r.type = item.type; r.preAlertMinutes = 0; if item == .prayer { r.sound = .adhan; var audio = ReminderAudio(); audio.recordingID = "alafasy"; r.audio = audio }; editing = r }
                                         else { category = item }
                                     }.accessibilityIdentifier("category-" + item.rawValue)
                                 }
@@ -149,13 +149,13 @@ struct PhoneEditor: View {
                 }
             }
             Section("المنبّه") {
-                Picker("الصوت", selection: $reminder.sound) { Text("منبّه النظام").tag(SoundChoice.default); Text("ذكر مسجّل").tag(SoundChoice.dhikr) }
-                Toggle("تأجيل لمدة 5 دقائق", isOn: $reminder.snoozeAllowed)
+                NavigationLink { PhoneSoundView(reminder: $reminder) } label: { LabeledContent("الصوت", value: AudioCatalog.summary(reminder)) }.accessibilityIdentifier("audio.settings")
+                if reminder.sound != .none { Toggle("تأجيل لمدة 5 دقائق", isOn: $reminder.snoozeAllowed) }
                 Toggle("التذكير مفعّل", isOn: $reminder.enabled)
                 Text("سيطلب الآيفون إذن المنبّهات عند حفظ أول تذكير. أوقات الصلاة التي تضيفها هنا يدوية.").font(Brand.font(14)).foregroundStyle(.secondary)
             }
             Section {
-                Button { Task { if await model.save(reminder) { dismiss() } } } label: { HStack { Spacer(); if model.isSaving { ProgressView() } else { Text("حفظ التذكير") }; Spacer() } }
+                Button { Task { if await model.save(reminder) { dismiss() } } } label: { HStack { Spacer(); if model.isSaving { ProgressView(); Text("جارٍ تجهيز التنبيه…") } else { Text("حفظ التذكير") }; Spacer() } }
                     .disabled(model.isSaving || reminder.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty).accessibilityIdentifier("save-reminder")
             }
         }.font(Brand.font(17)).navigationTitle("الوقت والتنبيه").navigationBarTitleDisplayMode(.inline)
@@ -177,7 +177,7 @@ struct PhoneSettings: View {
                 Link("الأربعون النووية", destination: URL(string: "https://sunnah.com/nawawi40")!)
                 Text("القرآن محفوظ كما ورد في مصدره. تخريج الأحاديث داخل نصوصها. الملفات والتراخيص مرفقة بالتطبيق.").font(Brand.font(14)).foregroundStyle(.secondary)
             }
-            Section("Master Reminder") { Text("0.2.0 · محفوظ على جهازك"); Text("المزامنة مع الماك غير مفعّلة في هذه النسخة.").font(Brand.font(14)).foregroundStyle(.secondary) }
+            Section("Master Reminder") { Text("\(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "") · بناء \(Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "")").accessibilityIdentifier("app.version"); Text("المزامنة مع الماك غير مفعّلة في هذه النسخة.").font(Brand.font(14)).foregroundStyle(.secondary) }
         }.font(Brand.font(16)).navigationTitle("على طريقتك")
     }
 }

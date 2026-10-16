@@ -183,3 +183,24 @@ xcodebuild -project iOS/MasterReminderPhone.xcodeproj -scheme MasterReminderPhon
 - التذكيرات السابقة تحتفظ بصوتها وبياناتها. افتح التذكير ← الصوت لتغيير اختياره. التأجيل والحفظ والاستعادة يحتفظون بالاختيار.
 - التنبيهات الصوتية المتزامنة بدون شاشة تُشغّل بالتتابع. الإيقاف العام والإغلاق والتأجيل يوقفون التشغيل.
 - تنفيذ اختيار الأصوات للتذكيرات هنا خاص بالماك؛ المحاكي والبناء غير الموقّع للهاتف لا يثبتان تشغيل هذه الأصوات كمنبّهات على iPhone.
+
+## iPhone 0.4.0 · build 8
+
+- معالج الإضافة والمكتبة والأيقونة والخطوط الأصلية، مع اختيار 4 مؤذنين و6 قرّاء وتسجيلات حصن المسلم وصوت عربي آلي أو ملف مستورد لكل تذكير.
+- يُجهّز الصوت ويتحقق من فكّه قبل استبدال التنبيه المحفوظ. التسجيل الكامل للمعاينة؛ مقطع نظامي PCM يصل إلى 29 ثانية للمنبّه، مع مستوى نسبي للمقطع. المستوى النهائي يخضع للجهاز. لا ندّعي تشغيل أذان طويل كامل تلقائيًا في الخلفية.
+- «بدون صوت» يستخدم إشعارات محلية بصوت nil، وبإذن إشعارات مستقل؛ يحترم Focus وإعدادات الإشعارات. المنبهات الصوتية تستخدم AlarmKit. أوقات الصلاة يدوية، ولا توجد مزامنة مع الماك.
+- اختبارات iOS تفحص تحويل الصوت الحقيقي وتخزينه واستيراده ومقاطع الصوت ومستوياتها وربط الآية والصوت، إضافة إلى معالج الإضافة والاستعادة والتحكم في الصوت. نتائج المحاكي لا تثبت الرنين أو الأذونات على الهاتف الحقيقي.
+- GitHub Actions يقرأ الإصدار والبناء من `iOS/project.yml`، ويتحقق من هوية Apple Distribution والمفتاح الخاص ومن تطابق الفريق والشهادة ومعرّفات التطبيق والأجهزة وصلاحية بروفايلات Ad Hoc. إذا غاب أحد البروفايلين يبقى الناتج موسومًا UNSIGNED صراحة، ولا يزعم وجود IPA قابل للتثبيت.
+- عند اكتمال المدخلات ونجاح الاختبارات: Archive ثم Export بطريقة release-testing ثم فحص توقيع التطبيق والويدجت والبروفايلات والإصدار وبصمة IPA. لا يوجد نشر إلى App Store.
+
+أسرار GitHub المطلوبة (كل الملفات Base64، وكلمة المرور نص كما هي):
+
+| Secret | Content |
+|---|---|
+| IOS_CERTIFICATE_P12 | Apple Distribution certificate + private key (.p12) |
+| IOS_CERTIFICATE_PASSWORD | P12 password |
+| IOS_APP_PROVISIONING_PROFILE | Ad Hoc profile for ly.masterlibya.masterreminder.ios |
+| IOS_WIDGET_PROVISIONING_PROFILE | Ad Hoc profile for ly.masterlibya.masterreminder.ios.widgets |
+| IOS_DEVICE_UDID | Optional: additionally assert that this exact device exists in both profiles |
+
+لا تُرفع ملفات التوقيع أو كلمات المرور في ملفات المستودع. لا يحتاج هذا المشروع App Groups أو Push Notifications؛ `NSAlarmKitUsageDescription` و`NSSupportsLiveActivities` موجودان في Info.plist.
